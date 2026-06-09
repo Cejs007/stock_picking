@@ -1,6 +1,12 @@
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import yfinance as yf
 
+from stock_picking.data.cache import Cache
 from stock_picking.data.models import FinancialData
+
+logger = logging.getLogger(__name__)
 
 
 class FetchError(Exception):
@@ -29,6 +35,42 @@ def fetch(ticker: str) -> FinancialData:
         cash=float(info.get("totalCash") or 0.0),
         fcf_history=_fcf_history(t),
     )
+
+
+def fetch_all(
+    tickers: list[str],
+    cache: Cache,
+    force_refresh: bool = False,
+    status_callback: object = None,
+) -> dict[str, FinancialData]:
+    results: dict[str, FinancialData] = {}
+    total = len(tickers)
+    done = 0
+
+    def _fetch_one(ticker: str) -> tuple[str, FinancialData | None]:
+        if not force_refresh:
+            cached = cache.get(ticker, "financials")
+            if cached is not None:
+                return ticker, FinancialData.model_validate(cached)
+        try:
+            fin = fetch(ticker)
+        except FetchError as exc:
+            logger.warning("fetch_all: skipping %s — %s", ticker, exc)
+            return ticker, None
+        cache.set(ticker, "financials", fin.model_dump())
+        return ticker, fin
+
+    with ThreadPoolExecutor() as executor:
+        futures = {executor.submit(_fetch_one, t): t for t in tickers}
+        for future in as_completed(futures):
+            ticker, fin = future.result()
+            if fin is not None:
+                results[ticker] = fin
+            done += 1
+            if callable(status_callback):
+                status_callback(done, total)
+
+    return results
 
 
 def _optional_float(value: object) -> float | None:

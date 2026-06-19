@@ -16,10 +16,12 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_default_model_weights(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Weights updated by AutoResearch (June 2026): Graham disabled (near-zero
+    # BVPS on capital-light tech distorts composite); P/E relative upweighted.
     s = Settings()
     assert s.model_weights == {
-        "graham": 1.0,
-        "pe_relative": 1.0,
+        "graham": 0.0,
+        "pe_relative": 1.5,
         "ev_ebitda": 1.0,
         "dcf": 1.0,
     }

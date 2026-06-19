@@ -24,7 +24,8 @@ def valuate(
         "dcf": dcf.calculate(fin, cfg),
     }
 
-    composite, _active, all_warnings = calculate_composite(results, settings.model_weights)
+    weights = settings.weights_for(fin.sector)
+    composite, _active, all_warnings = calculate_composite(results, weights)
 
     if composite is not None:
         master_score = (composite - fin.current_price) / fin.current_price * 100

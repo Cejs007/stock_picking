@@ -15,18 +15,21 @@ def test_returns_valuation_result(fin: FinancialData) -> None:
     assert result.current_price == 100.0
 
 
-def test_composite_is_equal_weight_average_of_four_models(fin: FinancialData) -> None:
-    # Graham = sqrt(22.5 * 5 * 40) ≈ 67.08
-    # P/E = median([15..19]) * 5 = 85.0
-    # EV/EBITDA = (median([8..12])*20 - 30 + 10) / 10 = 18.0
-    # DCF ≈ 180 (CAGR auto, WACC 10%, terminal 3%, 10yr)
-    graham_fv = math.sqrt(22.5 * 5.0 * 40.0)
-    pe_fv = 85.0
-    ev_fv = 18.0
-    dcf_fv = valuate(fin, Settings()).fair_value_dcf
+def test_composite_uses_default_fallback_weights(fin: FinancialData) -> None:
+    # fin has no sector -> valuator uses the default fallback weights
+    # {graham: 0, pe_relative: 1.5, ev_ebitda: 1.0, dcf: 1.0}.
+    #   P/E = median([15..19]) * 5 = 85.0
+    #   EV/EBITDA = (median([8..12])*20 - 30 + 10) / 10 = 18.0
+    #   DCF (CAGR auto, WACC 10%, terminal 3%, 10yr)
+    settings = Settings()
+    w = settings.weights_for(None)
+    result = valuate(fin, settings)
+    dcf_fv = result.fair_value_dcf
     assert dcf_fv is not None
-    expected = (graham_fv + pe_fv + ev_fv + dcf_fv) / 4
-    result = valuate(fin, Settings())
+    pe_fv, ev_fv = 85.0, 18.0
+    total = w["graham"] * 0 + w["pe_relative"] + w["ev_ebitda"] + w["dcf"]
+    expected = (pe_fv * w["pe_relative"] + ev_fv * w["ev_ebitda"]
+                + dcf_fv * w["dcf"]) / total
     assert result.fair_value_composite == pytest.approx(expected, rel=1e-6)
 
 

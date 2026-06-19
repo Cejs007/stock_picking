@@ -25,6 +25,7 @@ def fetch(ticker: str) -> FinancialData:
         ticker=ticker,
         company_name=info.get("longName"),
         currency=info.get("currency", "USD"),
+        sector=info.get("sector"),
         current_price=float(price),
         eps_ttm=_optional_float(info.get("trailingEps")),
         bvps=_optional_float(info.get("bookValue")),

@@ -5,6 +5,9 @@ class FinancialData(BaseModel):
     ticker: str
     company_name: str | None = None
     currency: str = "USD"
+    # GICS-style sector string from the data provider (e.g. "Technology",
+    # "Financial Services"). Drives which ensemble template the valuator uses.
+    sector: str | None = None
     current_price: float
     eps_ttm: float | None = None
     bvps: float | None = None

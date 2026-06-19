@@ -9,3 +9,9 @@ dist/
 *.egg-info/
 .venv/
 *.db
+
+# AutoResearch run artifacts (regenerate with the harness)
+research/dataset.json
+research/tuned_weights.json
+research/autoresearch_log.jsonl
+autoresearch_cache.db

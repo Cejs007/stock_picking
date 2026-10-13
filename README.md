@@ -105,8 +105,13 @@ disagree on purpose; the composite reconciles them.
 - **EV/EBITDA relative** — values the enterprise against its historical
   EV/EBITDA multiple. Meaningless for banks/insurers (no real EBITDA).
 - **DCF** (discounted cash flow) — discounts projected free cash flow back to
-  today. Strong for stable cash compounders, noisy for deep cyclicals. If you
-  don't supply a growth rate it is derived from the company's FCF history.
+  today. Strong for stable cash compounders, noisy for deep cyclicals. The base
+  is the average FCF of the last 3 years; growth fades linearly from the
+  initial rate to the terminal rate over the projection, and net debt
+  (debt − cash) is subtracted before dividing by shares. If you don't supply a
+  growth rate it is derived from the company's FCF history (CAGR) and clamped
+  to [−5 %, 15 %]; a growth rate you supply is used as-is. N/A when WACC ≤
+  terminal growth.
 
 ### How the composite is built
 

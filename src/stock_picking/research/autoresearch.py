@@ -39,7 +39,7 @@ WEIGHT_GRID = (0.0, 0.5, 1.0, 1.5, 2.0)
 # (the "with fallback" rule) — too little data to tune without overfitting.
 MIN_SECTOR_SAMPLES = 6
 
-EQUAL_WEIGHTS = _w(1.0, 1.0, 1.0, 1.0)
+EQUAL_WEIGHTS = dict.fromkeys(MODEL_NAMES, 1.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -276,7 +276,7 @@ def print_report(report: Report) -> None:
     print("-" * len(hdr))
     rows = list(report.sectors) + ([report.default] if report.default else [])
     for s in rows:
-        w = " ".join(f"{k.split('_')[0]}={s.weights[k]:g}" for k in MODEL_NAMES)
+        w = " ".join(f"{k.split('_')[0]}={s.weights.get(k, 0.0):g}" for k in MODEL_NAMES)
         print(
             f"{s.sector:<24}{'Y' if s.tuned else 'n':<6}{s.n_total:<4}"
             f"{_fmt(s.val_mape):>7}{_fmt(s.baseline_equal_val_mape):>8}"

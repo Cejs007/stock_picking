@@ -8,7 +8,13 @@ def calculate(data: FinancialData, config: ModelConfig) -> tuple[float | None, l
         return None, ["All FCF values are non-positive; DCF cannot be calculated"]
     if data.shares_outstanding is None or data.shares_outstanding <= 0:
         return None, ["shares_outstanding must be positive for DCF"]
+    if config.wacc <= config.terminal_growth_rate:
+        return None, [
+            f"WACC ({config.wacc:.1%}) must exceed terminal growth "
+            f"({config.terminal_growth_rate:.1%}) for DCF"
+        ]
 
+    warnings: list[str] = []
     if config.growth_rate_override is not None:
         g = config.growth_rate_override
     else:
@@ -18,6 +24,12 @@ def calculate(data: FinancialData, config: ModelConfig) -> tuple[float | None, l
             g = (last / first) ** (1 / (n - 1)) - 1
         else:
             g = 0.0
+        clamped = min(max(g, config.auto_growth_min), config.auto_growth_max)
+        if clamped != g:
+            warnings.append(
+                f"Auto-derived FCF growth {g:.1%} clamped to {clamped:.1%} for DCF"
+            )
+            g = clamped
 
     fcf_base = data.fcf_history[-1] / data.shares_outstanding
     wacc = config.wacc
@@ -31,4 +43,4 @@ def calculate(data: FinancialData, config: ModelConfig) -> tuple[float | None, l
     terminal_value = fcf_terminal * (1 + t_g) / (wacc - t_g)
     pv_terminal = terminal_value / (1 + wacc) ** n_years
 
-    return pv_fcf + pv_terminal, []
+    return pv_fcf + pv_terminal, warnings

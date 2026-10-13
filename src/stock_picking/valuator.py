@@ -1,4 +1,5 @@
 from stock_picking.data.models import FinancialData, ModelConfig
+from stock_picking.fx import unresolved_currency_reason
 from stock_picking.models.composite import calculate_composite
 from stock_picking.models.registry import MODEL_REGISTRY
 from stock_picking.settings import Settings
@@ -16,6 +17,18 @@ def valuate(
         if overrides and overrides.mos_override is not None
         else settings.default_mos
     )
+
+    currency_problem = unresolved_currency_reason(fin)
+    if currency_problem is not None:
+        # Statement totals may be in another currency than the price, so any
+        # fair value could compare mixed currencies. Don't value or rank it.
+        return ValuationResult(
+            ticker=fin.ticker,
+            current_price=fin.current_price,
+            currency=fin.currency,
+            signal="N/A",
+            warnings=[currency_problem],
+        )
 
     results = {name: model.calculate(fin, cfg) for name, model in MODEL_REGISTRY.items()}
 
@@ -45,6 +58,7 @@ def valuate(
         fair_value_high=composite_result.high,
         fair_value_cv=composite_result.cv,
         current_price=fin.current_price,
+        currency=fin.currency,
         master_score=master_score,
         buy_target=buy_target,
         signal=signal,

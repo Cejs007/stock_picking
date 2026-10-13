@@ -43,6 +43,7 @@ def result() -> ValuationResult:
         fair_values={"graham": 130.0, "pe_relative": 150.0, "ev_ebitda": 140.0, "dcf": 160.0},
         fair_value_composite=145.0,
         current_price=100.0,
+        currency="USD",
         master_score=45.0,
         buy_target=108.75,
         signal="BUY",
@@ -117,3 +118,56 @@ def test_build_dashboard_rows_formats_values(result: ValuationResult) -> None:
     assert row["P/E"] == "$150.00"
     assert row["EV/EBITDA"] == "$140.00"
     assert row["DCF"] == "$160.00"
+
+
+def test_build_dashboard_rows_uses_each_results_currency(result: ValuationResult) -> None:
+    cez = result.model_copy(update={
+        "ticker": "CEZ.PR",
+        "currency": "CZK",
+        "current_price": 1050.0,
+        "fair_value_composite": 1200.0,
+        "buy_target": 900.0,
+        "master_score": 14.3,
+    })
+    rows = {r["Ticker"]: r for r in build_dashboard_rows([result, cez])}
+
+    assert rows["CEZ.PR"]["Price"] == "CZK 1050.00"
+    assert rows["CEZ.PR"]["Fair Value"] == "CZK 1200.00"
+    assert rows["CEZ.PR"]["Buy Target"] == "CZK 900.00"
+    assert rows["CEZ.PR"]["DCF"] == "CZK 160.00"
+    assert rows["AAPL"]["Price"] == "$100.00"
+    assert rows["AAPL"]["Fair Value"] == "$145.00"
+
+
+def test_format_currency_unknown_currency_has_no_symbol() -> None:
+    assert format_currency(99.99, None) == "99.99"
+
+
+def test_build_dashboard_rows_legacy_row_without_currency_has_no_symbol(
+    result: ValuationResult,
+) -> None:
+    legacy = result.model_copy(update={"currency": None})
+    row = build_dashboard_rows([legacy])[0]
+    assert row["Price"] == "100.00"
+
+
+def test_build_dashboard_rows_shows_why_signal_is_na(result: ValuationResult) -> None:
+    unconverted = ValuationResult(
+        ticker="ASML",
+        current_price=700.0,
+        currency="USD",
+        signal="N/A",
+        warnings=[
+            "Fundamentals are in EUR but the price is in USD; FX rate unavailable,"
+            " values not converted",
+            "FCF history is required for DCF",
+        ],
+    )
+    rows = {r["Ticker"]: r for r in build_dashboard_rows([result, unconverted])}
+
+    assert rows["ASML"]["Signal"] == "N/A"
+    assert rows["ASML"]["Warnings"] == (
+        "Fundamentals are in EUR but the price is in USD; FX rate unavailable,"
+        " values not converted | FCF history is required for DCF"
+    )
+    assert rows["AAPL"]["Warnings"] == ""

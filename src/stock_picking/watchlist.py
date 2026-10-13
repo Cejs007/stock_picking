@@ -45,6 +45,9 @@ class ValuationResult(BaseModel):
     fair_value_high: float | None = None
     fair_value_cv: float | None = None
     current_price: float
+    # Quote currency of current_price and every fair value above. None only for
+    # rows saved before the currency column existed.
+    currency: str | None = None
     master_score: float | None = None
     buy_target: float | None = None
     signal: str
@@ -71,7 +74,12 @@ class Watchlist:
         self._migrate_fair_values_column()
         self._add_missing_columns(
             "valuations",
-            {"fair_value_low": "REAL", "fair_value_high": "REAL", "fair_value_cv": "REAL"},
+            {
+                "fair_value_low": "REAL",
+                "fair_value_high": "REAL",
+                "fair_value_cv": "REAL",
+                "currency": "TEXT",
+            },
         )
         self._conn.execute(_WATCHLIST_DDL)
         self._conn.commit()
@@ -208,8 +216,8 @@ class Watchlist:
             INSERT INTO valuations (
                 ticker, fair_values, fair_value_composite, current_price,
                 master_score, buy_target, signal, warnings, calculated_at,
-                fair_value_low, fair_value_high, fair_value_cv
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                fair_value_low, fair_value_high, fair_value_cv, currency
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ticker) DO UPDATE SET
                 fair_values = excluded.fair_values,
                 fair_value_composite = excluded.fair_value_composite,
@@ -221,7 +229,8 @@ class Watchlist:
                 calculated_at = excluded.calculated_at,
                 fair_value_low = excluded.fair_value_low,
                 fair_value_high = excluded.fair_value_high,
-                fair_value_cv = excluded.fair_value_cv
+                fair_value_cv = excluded.fair_value_cv,
+                currency = excluded.currency
             """,
             (
                 result.ticker,
@@ -241,6 +250,7 @@ class Watchlist:
                 result.fair_value_low,
                 result.fair_value_high,
                 result.fair_value_cv,
+                result.currency,
             ),
         )
         self._conn.commit()
@@ -250,7 +260,7 @@ class Watchlist:
             """
             SELECT ticker, fair_values, fair_value_composite, current_price,
                    master_score, buy_target, signal, warnings, calculated_at,
-                   fair_value_low, fair_value_high, fair_value_cv
+                   fair_value_low, fair_value_high, fair_value_cv, currency
             FROM valuations
             """
         ).fetchall()
@@ -268,6 +278,7 @@ class Watchlist:
                 fair_value_low=r[9],
                 fair_value_high=r[10],
                 fair_value_cv=r[11],
+                currency=r[12],
             )
             for r in rows
         ]

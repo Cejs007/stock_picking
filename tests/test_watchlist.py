@@ -293,3 +293,77 @@ def test_legacy_db_accepts_unset_overrides_after_load(tmp_path: Path) -> None:
     reopened = Watchlist(db_path=db)
     assert reopened.tickers() == wl.tickers()
     assert reopened.get_overrides("CEZ.PR") == cez
+
+
+def test_save_valuation_roundtrips_currency(wl: Watchlist, valuation: ValuationResult) -> None:
+    wl.save_valuation(valuation.model_copy(update={"ticker": "CEZ.PR", "currency": "CZK"}))
+    [loaded] = wl.get_valuations()
+    assert loaded.currency == "CZK"
+
+
+def test_existing_db_without_currency_column_is_migrated(tmp_path: Path) -> None:
+    db = str(tmp_path / "old.db")
+    conn = sqlite3.connect(db)
+    # valuations schema as shipped in v1, before the currency column.
+    conn.execute("""
+        CREATE TABLE valuations (
+            ticker TEXT PRIMARY KEY,
+            fair_value_dcf REAL,
+            fair_value_graham REAL,
+            fair_value_pe REAL,
+            fair_value_ev_ebitda REAL,
+            fair_value_composite REAL,
+            current_price REAL NOT NULL,
+            master_score REAL,
+            buy_target REAL,
+            signal TEXT NOT NULL,
+            warnings TEXT NOT NULL DEFAULT '[]',
+            calculated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute(
+        "INSERT INTO valuations (ticker, current_price, signal, calculated_at)"
+        " VALUES ('OLD', 50.0, 'WAIT', '2026-06-01T00:00:00+00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    wl = Watchlist(db_path=db)
+
+    [old] = wl.get_valuations()
+    assert old.ticker == "OLD"
+    assert old.current_price == 50.0
+    assert old.currency is None
+
+    wl.save_valuation(ValuationResult(ticker="NEW", current_price=1.0, signal="N/A", currency="EUR"))
+    by_ticker = {v.ticker: v for v in wl.get_valuations()}
+    assert by_ticker["NEW"].currency == "EUR"
+
+
+def test_reopening_migrated_db_is_idempotent(tmp_path: Path) -> None:
+    db = str(tmp_path / "wl.db")
+    Watchlist(db_path=db).save_valuation(
+        ValuationResult(ticker="X", current_price=1.0, signal="N/A", currency="USD")
+    )
+    [reloaded] = Watchlist(db_path=db).get_valuations()
+    assert reloaded.currency == "USD"
+
+
+def test_every_valuation_column_roundtrips_to_its_own_field(wl: Watchlist) -> None:
+    # get_valuations reads columns by position; distinct values catch a shifted index.
+    saved = ValuationResult(
+        ticker="ASML",
+        fair_values={"dcf": 610.0, "graham": None},
+        fair_value_composite=650.0,
+        fair_value_low=600.0,
+        fair_value_high=700.0,
+        fair_value_cv=0.07,
+        current_price=640.0,
+        currency="EUR",
+        master_score=1.5,
+        buy_target=520.0,
+        signal="WAIT",
+        warnings=["w"],
+    )
+    wl.save_valuation(saved)
+    assert wl.get_valuations() == [saved]

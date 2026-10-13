@@ -25,6 +25,10 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "--strict-markers"
+markers = [
+    "live: hits real data sources (yfinance/FMP); skipped unless pytest --live",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/stock_picking"]

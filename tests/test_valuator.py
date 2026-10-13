@@ -182,6 +182,51 @@ def test_all_models_unavailable_returns_none_composite_and_na_signal(fin: Financ
     assert result.signal == "N/A"
 
 
+def test_result_carries_quote_currency(fin: FinancialData) -> None:
+    czk = fin.model_copy(update={"currency": "CZK", "financial_currency": "CZK"})
+    result = valuate(czk, Settings())
+    assert result.currency == "CZK"
+
+
+def test_unconverted_fundamentals_give_na_signal_with_reason(fin: FinancialData) -> None:
+    # Price 1.0 is far below every model's fair value (P/E alone = 85), so with
+    # matching currencies this is a BUY.
+    cheap = fin.model_copy(update={"current_price": 1.0, "financial_currency": "USD"})
+    assert valuate(cheap, Settings()).signal == "BUY"
+
+    # FX rate was unavailable upstream: statements still in EUR, quote in USD.
+    # The fair values would mix EUR totals with a USD price, so nothing is
+    # valued or ranked.
+    mismatched = cheap.model_copy(update={"financial_currency": "EUR"})
+    result = valuate(mismatched, Settings())
+
+    assert result.signal == "N/A"
+    assert result.fair_value_composite is None
+    assert result.master_score is None
+    assert result.buy_target is None
+    assert result.fair_values == {}
+    assert result.currency == "USD"
+    assert any("EUR" in w and "USD" in w and "not converted" in w for w in result.warnings)
+
+
+def test_unknown_statement_currency_gives_na_signal_with_reason(fin: FinancialData) -> None:
+    # Cache entries written before financial_currency existed load with None:
+    # we can't tell whether the totals are in the quote currency.
+    cheap = fin.model_copy(update={"current_price": 1.0, "financial_currency": None})
+    result = valuate(cheap, Settings())
+
+    assert result.signal == "N/A"
+    assert result.fair_value_composite is None
+    assert result.master_score is None
+    assert any("Statement currency unknown" in w for w in result.warnings)
+
+
+def test_matching_currencies_produce_no_currency_warning(fin: FinancialData) -> None:
+    matched = fin.model_copy(update={"currency": "USD", "financial_currency": "USD"})
+    result = valuate(matched, Settings())
+    assert not any("currency" in w.lower() for w in result.warnings)
+
+
 def test_each_valuation_gets_its_own_calculation_time(fin: FinancialData) -> None:
     # Fake clock: each datetime.now() call returns the next tick, so the two
     # valuations are "created at different times" without sleeping.

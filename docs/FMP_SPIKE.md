@@ -93,7 +93,9 @@ Pro srovnání yfinance (živě, roční `income_stmt`):
 
 Ano, ale na free tieru jen pro vzorek, za 5 let a jen ročně.
 
-- **P/E (historické):** `ratios`, pole `priceToEarningsRatio` (název z paměti, ověřit). Počítá se z ceny ke konci fiskálního období.
+> **Názvy polí v této sekci jsou zástupné (placeholder), ne ověřené.** Nejsou ve statické dokumentaci (viz níže). Platné budou až po živém ověření (bod 5 v sekci „Živé ověření“). #23 podle nich nesmí psát mapování.
+
+- **P/E (historické):** `ratios`, pole `priceToEarningsRatio`. Počítá se z ceny ke konci fiskálního období.
 - **EV/EBITDA:** `key-metrics`, pole `evToEBITDA`, nebo `ratios`, pole `enterpriseValueMultiple`. Samotné EV je v `enterprise-values`.
 - **ROIC:** `key-metrics`, pole `returnOnInvestedCapital` a `investedCapital`.
 - **Dividendy:**
@@ -114,7 +116,7 @@ Ano, ale na free tieru jen pro vzorek, za 5 let a jen ročně.
 - **Důsledek pro #36:**
   - Pro US SEC filery jde 3měsíční pravidlo postavit nad `filingDate`/`acceptedDate`.
   - Pro ne-SEC symboly je nutné odvozené zpoždění od `date` (např. konec FY + N měsíců).
-  - Na free tieru je ale hlavní překážka délka historie. S 5 ročními obdobími, 3měsíčním zpožděním a 3letým forward výnosem zbývá prakticky 1–2 rozhodovací roky.
+  - Na free tieru je ale hlavní překážka délka historie. S 5 ročními obdobími, 3měsíčním zpožděním a 3letým forward výnosem zbývá prakticky 1–2 rozhodovací roky. A každé z těch rozhodnutí má za sebou jen 1–2 roky výkazů, takže modely, které potřebují 3+ roky historie (P/E a EV/EBITDA relativní, CAGR v DCF), v něm budou N/A nebo s varováním.
 
 ### 5. Jaký je reálný denní limit a kolik požadavků potřebuje jeden ticker?
 
@@ -133,12 +135,16 @@ Požadavky na plné ocenění jednoho tickeru (návrh pro #23):
 | 4 | `key-metrics` | EV, EV/EBITDA, ROIC, investovaný kapitál | ano |
 | 5 | `ratios` | P/E, DPS, payout | ano |
 | 6 | `dividends` | jednotlivé výplaty | volitelné (na free jen 5 záznamů, lépe z yfinance) |
-| 7 | `profile` | měna, sektor, burza | volitelné (dává i yfinance) |
-| — | `search-symbol` | mapování tickeru | jednorázově na nový ticker, cachovat |
+| 7 | `profile` | měna, sektor, burza | volitelné (dává i yfinance). Dostupnost na free pro symboly mimo vzorek neověřená. |
+| — | `search-symbol` | mapování tickeru | jednorázově na nový ticker, cachovat. Pokrytí na free („Full Global Coverage“) jen podle tabulky plánů, neověřeno. |
 
 - **5 požadavků na ticker (7 s volitelnými).** Při studené cache to je 250 / 5 = 50 tickerů denně, se všemi volitelnými ~35.
 - S TTL 30–90 dní pro roční výkazy (SCREENER.md §2, bod 3) je denní spotřeba u watchlistu 10–50 tickerů zanedbatelná. Ceny a kurzy jdou z yfinance.
-- Pozor: požadavek na symbol mimo plán stojí požadavek také. Klient by si měl odpověď „mimo plán“ uložit do cache (negativní cache), aby ji neopakoval každý refresh.
+- Pozor: požadavek na symbol mimo plán stojí požadavek také. Klient si **musí** odpověď „mimo plán“ uložit do cache (negativní cache), aby ji neopakoval každý refresh. Pro #23 je to požadavek, ne doporučení.
+- **Sledování kvóty v #23 (SCREENER.md §2, bod 4):**
+  - počítat požadavky proti 250/den a zároveň sledovat bandwidth 500 MB / 30 dní;
+  - free plán má denní limit, placené plány limit za minutu. Počítadlo musí umět obojí, podle nastaveného plánu;
+  - `429 Too Many Requests` znamená „kvóta vyčerpaná, přepnout na yfinance“, **ne** „zkusit znovu s backoffem“. Retry s backoffem patří jen k timeoutu a 5xx.
 - **Pro screener (komentář v #22):** hromadné endpointy (`*-bulk`, `key-metrics-ttm-bulk`, `ratios-ttm-bulk`) jsou jen v Ultimate. Screener endpoint na free tieru není, Starter má jen US a Premium US, UK a CA. Předpoklad SCREENER.md, že free tier stačí díky hromadnému předfiltru, **neplatí**.
 
 ## Doporučení: co přes FMP a co jen přes yfinance
@@ -177,6 +183,7 @@ Do 15 požadavků. Tisknout jen tvar (počet řádků, roky, názvy polí, 1 ř�
 3. `income-statement` pro `MSFT` a `ASML`: jsou ve vzorku? U ASML porovnat `filingDate` a `date`.
 4. `income-statement?symbol=CEZ.PR`: přesné znění chyby a HTTP kód pro symbol mimo plán (pro negativní cache v #23).
 5. `key-metrics` a `ratios` pro AAPL: skutečné názvy polí pro P/E, EV/EBITDA, ROIC, DPS a `reportedCurrency`.
+   - Pokud je ASML ve vzorku, také `key-metrics?symbol=ASML`: jsou `enterpriseValue` a `marketCap` v měně výkazu (EUR), nebo v měně kotace (USD)? Na tom závisí, které hodnoty převádí FX (#21).
 6. `dividends?symbol=AAPL`: kolik záznamů a v jaké struktuře.
 7. Po běhu zkontrolovat v dashboardu FMP spotřebu požadavků a bandwidth.
 

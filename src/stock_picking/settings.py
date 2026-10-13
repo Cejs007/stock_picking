@@ -4,12 +4,17 @@ from pathlib import Path
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Model identifiers used as weight keys everywhere in the system.
-MODEL_NAMES = ("graham", "pe_relative", "ev_ebitda", "dcf")
+from stock_picking.models.registry import MODEL_REGISTRY
+
+# Weight keys: the registered models that enter the composite.
+MODEL_NAMES = tuple(name for name, model in MODEL_REGISTRY.items() if model.in_composite)
 
 
 def _w(graham: float, pe: float, ev: float, dcf: float) -> dict[str, float]:
-    return {"graham": graham, "pe_relative": pe, "ev_ebitda": ev, "dcf": dcf}
+    # Any other registered composite model gets weight 0 until a prior is set.
+    weights = dict.fromkeys(MODEL_NAMES, 0.0)
+    weights.update({"graham": graham, "pe_relative": pe, "ev_ebitda": ev, "dcf": dcf})
+    return weights
 
 
 # --------------------------------------------------------------------------- #

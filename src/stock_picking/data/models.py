@@ -40,5 +40,8 @@ class ModelConfig(BaseModel):
     projection_years: int = 10
     # When None the DCF model auto-derives growth from FCF CAGR.
     growth_rate_override: float | None = None
+    # Bounds for the auto-derived DCF growth (decimals). An override is not clamped.
+    auto_growth_min: float = -0.05
+    auto_growth_max: float = 0.15
     # Minimum years of history required for P/E and EV/EBITDA relative models.
     min_history_years: int = 3

@@ -33,8 +33,9 @@ def fin() -> FinancialData:
         fair_price = 180 / 10 = 18.0
 
     DCF (auto CAGR from fcf_history, WACC 10%, terminal 3%, 10 years):
-        FCF per share (latest) = 100 / 10 = 10.0
-        growth ≈ 5.74%  (CAGR of [80, 85, 90, 95, 100])
+        base FCF = avg(90, 95, 100) = 95 (total), 9.5 per share
+        initial growth ≈ 5.74%  (CAGR of [80, 85, 90, 95, 100]), fading to 3%
+        net debt = 30 - 10 = 20 → fair value ≈ 154.37 per share
     """
     return FinancialData(
         ticker="TEST",

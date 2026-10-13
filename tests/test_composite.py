@@ -108,3 +108,18 @@ def test_cv_undefined_when_mean_not_positive() -> None:
     assert c.low == pytest.approx(-50.0)
     assert c.high == pytest.approx(30.0)
     assert c.cv is None
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        (100.0, -95.0),  # mean 2.5, pstdev 97.5 -> CV would read 3900%
+        (-50.0, 50.0),  # mean exactly 0 -> CV would divide by zero
+        (100.0, 0.0),  # a zero fair value is not a positive valuation either
+    ],
+)
+def test_cv_undefined_when_any_active_value_not_positive(values: tuple[float, float]) -> None:
+    results = {"a": (values[0], []), "b": (values[1], [])}
+    c = calculate_composite(results, {"a": 1.0, "b": 1.0})
+    assert c.cv is None
+    assert any("disagreement" in w.lower() for w in c.warnings)

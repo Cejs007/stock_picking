@@ -27,13 +27,23 @@ def calculate_composite(
     }
 
     if not active:
-        return CompositeResult(None, None, None, None, [], all_warnings)
+        return CompositeResult(
+            fair_value=None, low=None, high=None, cv=None, active=[], warnings=all_warnings
+        )
 
     total_weight = sum(w for _, w in active.values())
     fair_value = sum(v * w / total_weight for v, w in active.values())
     values = [v for v, _ in active.values()]
+    cv = _cv(values)
+    if cv is None:
+        all_warnings.append("Model disagreement N/A: a fair value is non-positive")
     return CompositeResult(
-        fair_value, min(values), max(values), _cv(values), list(active.keys()), all_warnings
+        fair_value=fair_value,
+        low=min(values),
+        high=max(values),
+        cv=cv,
+        active=list(active.keys()),
+        warnings=all_warnings,
     )
 
 
@@ -41,7 +51,8 @@ def _cv(values: list[float]) -> float | None:
     # Coefficient of variation = population std / mean, unweighted over active
     # models. Population (not sample) std: the active models are the whole set
     # being described, not a sample, and it gives a finite 0 for one model.
-    mean = statistics.fmean(values)
-    if mean <= 0:
+    # Only meaningful on a ratio scale: one negative value (e.g. EV/EBITDA for a
+    # heavily indebted company) pulls the mean toward 0 and inflates CV.
+    if any(v <= 0 for v in values):
         return None
-    return statistics.pstdev(values) / mean
+    return statistics.pstdev(values) / statistics.fmean(values)

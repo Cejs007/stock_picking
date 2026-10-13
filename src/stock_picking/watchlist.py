@@ -69,7 +69,10 @@ class Watchlist:
             )
         """)
         self._migrate_fair_values_column()
-        self._migrate_fair_value_range_columns()
+        self._add_missing_columns(
+            "valuations",
+            {"fair_value_low": "REAL", "fair_value_high": "REAL", "fair_value_cv": "REAL"},
+        )
         self._conn.execute(_WATCHLIST_DDL)
         self._conn.commit()
         self._migrate_nullable_dcf_overrides()
@@ -115,11 +118,13 @@ class Watchlist:
             )
         """)
 
-    def _migrate_fair_value_range_columns(self) -> None:
-        columns = {r[1] for r in self._conn.execute("PRAGMA table_info(valuations)")}
-        for column in ("fair_value_low", "fair_value_high", "fair_value_cv"):
-            if column not in columns:
-                self._conn.execute(f"ALTER TABLE valuations ADD COLUMN {column} REAL")
+    def _add_missing_columns(self, table: str, columns: dict[str, str]) -> None:
+        # Additive migration for columns introduced after a DB was created.
+        # Table and column names are code constants, never user input.
+        existing = {r[1] for r in self._conn.execute(f"PRAGMA table_info({table})")}
+        for column, sql_type in columns.items():
+            if column not in existing:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
 
     def add(self, ticker: str, company_name: str | None = None, currency: str | None = None) -> None:
         self._conn.execute(

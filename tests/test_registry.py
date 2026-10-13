@@ -44,6 +44,8 @@ def test_non_composite_model_is_computed_and_shown_but_not_in_composite(
     assert result.fair_values["fake"] == pytest.approx(500.0)
     # Fake is excluded despite its weight of 1 -> composite = P/E alone = 85.0
     assert result.fair_value_composite == pytest.approx(85.0)
+    # ...and out of the range too (a diagnostic such as reverse DCF must not widen it)
+    assert result.fair_value_high == pytest.approx(85.0)
     assert "fake model warning" in result.warnings
     assert build_dashboard_rows([result])[0]["Fake"] == "$500.00"
 

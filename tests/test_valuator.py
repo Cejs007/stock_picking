@@ -33,6 +33,17 @@ def test_composite_uses_default_fallback_weights(fin: FinancialData) -> None:
     assert result.fair_value_composite == pytest.approx(expected, rel=1e-6)
 
 
+def test_fair_value_range_and_disagreement(fin: FinancialData) -> None:
+    # Only Graham and P/E active (weights 1:1, no sector -> model_weights).
+    #   Graham = sqrt(22.5 * 5 * 40) = 67.0820, P/E = 85.0
+    #   mean = 76.0410, population std = (85 - 67.0820) / 2 = 8.9590
+    #   CV = 8.9590 / 76.0410 = 0.117818
+    result = valuate(fin, Settings(model_weights={"graham": 1.0, "pe_relative": 1.0}))
+    assert result.fair_value_low == pytest.approx(67.0820, rel=1e-5)
+    assert result.fair_value_high == pytest.approx(85.0)
+    assert result.fair_value_cv == pytest.approx(0.117818, rel=1e-5)
+
+
 def test_master_score_is_upside_percent(fin: FinancialData) -> None:
     result = valuate(fin, Settings())
     assert result.fair_value_composite is not None
@@ -161,6 +172,9 @@ def test_all_models_unavailable_returns_none_composite_and_na_signal(fin: Financ
     })
     result = valuate(broken, Settings())
     assert result.fair_value_composite is None
+    assert result.fair_value_low is None
+    assert result.fair_value_high is None
+    assert result.fair_value_cv is None
     assert result.master_score is None
     assert result.buy_target is None
     assert result.signal == "N/A"

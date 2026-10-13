@@ -40,6 +40,10 @@ class ValuationResult(BaseModel):
     # Per-model fair value per share, keyed by MODEL_REGISTRY name.
     fair_values: dict[str, float | None] = Field(default_factory=dict)
     fair_value_composite: float | None = None
+    # Range and coefficient of variation of the active composite models.
+    fair_value_low: float | None = None
+    fair_value_high: float | None = None
+    fair_value_cv: float | None = None
     current_price: float
     master_score: float | None = None
     buy_target: float | None = None
@@ -65,6 +69,10 @@ class Watchlist:
             )
         """)
         self._migrate_fair_values_column()
+        self._add_missing_columns(
+            "valuations",
+            {"fair_value_low": "REAL", "fair_value_high": "REAL", "fair_value_cv": "REAL"},
+        )
         self._conn.execute(_WATCHLIST_DDL)
         self._conn.commit()
         self._migrate_nullable_dcf_overrides()
@@ -109,6 +117,14 @@ class Watchlist:
                 'dcf', fair_value_dcf
             )
         """)
+
+    def _add_missing_columns(self, table: str, columns: dict[str, str]) -> None:
+        # Additive migration for columns introduced after a DB was created.
+        # Table and column names are code constants, never user input.
+        existing = {r[1] for r in self._conn.execute(f"PRAGMA table_info({table})")}
+        for column, sql_type in columns.items():
+            if column not in existing:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
 
     def add(self, ticker: str, company_name: str | None = None, currency: str | None = None) -> None:
         self._conn.execute(
@@ -191,8 +207,9 @@ class Watchlist:
             """
             INSERT INTO valuations (
                 ticker, fair_values, fair_value_composite, current_price,
-                master_score, buy_target, signal, warnings, calculated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                master_score, buy_target, signal, warnings, calculated_at,
+                fair_value_low, fair_value_high, fair_value_cv
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ticker) DO UPDATE SET
                 fair_values = excluded.fair_values,
                 fair_value_composite = excluded.fair_value_composite,
@@ -201,7 +218,10 @@ class Watchlist:
                 buy_target = excluded.buy_target,
                 signal = excluded.signal,
                 warnings = excluded.warnings,
-                calculated_at = excluded.calculated_at
+                calculated_at = excluded.calculated_at,
+                fair_value_low = excluded.fair_value_low,
+                fair_value_high = excluded.fair_value_high,
+                fair_value_cv = excluded.fair_value_cv
             """,
             (
                 result.ticker,
@@ -218,6 +238,9 @@ class Watchlist:
                 result.signal,
                 json.dumps(result.warnings),
                 result.calculated_at.isoformat(),
+                result.fair_value_low,
+                result.fair_value_high,
+                result.fair_value_cv,
             ),
         )
         self._conn.commit()
@@ -226,7 +249,8 @@ class Watchlist:
         rows = self._conn.execute(
             """
             SELECT ticker, fair_values, fair_value_composite, current_price,
-                   master_score, buy_target, signal, warnings, calculated_at
+                   master_score, buy_target, signal, warnings, calculated_at,
+                   fair_value_low, fair_value_high, fair_value_cv
             FROM valuations
             """
         ).fetchall()
@@ -241,6 +265,9 @@ class Watchlist:
                 signal=r[6],
                 warnings=json.loads(r[7]),
                 calculated_at=datetime.fromisoformat(r[8]),
+                fair_value_low=r[9],
+                fair_value_high=r[10],
+                fair_value_cv=r[11],
             )
             for r in rows
         ]

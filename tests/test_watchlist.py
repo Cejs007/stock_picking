@@ -136,6 +136,52 @@ def test_legacy_valuations_table_is_migrated_to_fair_values(tmp_path) -> None:
     assert r.fair_value_composite == pytest.approx(87.5)
 
 
+def test_fair_value_range_and_cv_roundtrip(wl: Watchlist, valuation: ValuationResult) -> None:
+    ranged = valuation.model_copy(
+        update={"fair_value_low": 18.0, "fair_value_high": 180.0, "fair_value_cv": 0.75}
+    )
+    wl.save_valuation(ranged)
+    r = wl.get_valuations()[0]
+    assert r.fair_value_low == pytest.approx(18.0)
+    assert r.fair_value_high == pytest.approx(180.0)
+    assert r.fair_value_cv == pytest.approx(0.75)
+
+
+def test_valuations_table_without_range_columns_is_migrated(tmp_path) -> None:
+    db = tmp_path / "pre_range.db"
+    conn = sqlite3.connect(db)
+    conn.execute("""
+        CREATE TABLE valuations (
+            ticker TEXT PRIMARY KEY,
+            fair_values TEXT NOT NULL DEFAULT '{}',
+            fair_value_composite REAL,
+            current_price REAL NOT NULL,
+            master_score REAL,
+            buy_target REAL,
+            signal TEXT NOT NULL,
+            warnings TEXT NOT NULL DEFAULT '[]',
+            calculated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute(
+        "INSERT INTO valuations VALUES"
+        " ('AAPL', '{\"dcf\": 180.0}', 87.5, 100.0, -12.5, 65.6, 'WAIT', '[]',"
+        " '2026-01-01T00:00:00+00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    wl = Watchlist(db_path=str(db))
+    old = wl.get_valuations()[0]
+    assert old.fair_value_composite == pytest.approx(87.5)
+    assert (old.fair_value_low, old.fair_value_high, old.fair_value_cv) == (None, None, None)
+
+    wl.save_valuation(old.model_copy(update={"fair_value_low": 18.0, "fair_value_cv": 0.5}))
+    new = wl.get_valuations()[0]
+    assert new.fair_value_low == pytest.approx(18.0)
+    assert new.fair_value_cv == pytest.approx(0.5)
+
+
 def test_add_stores_metadata_in_get_all_entries(wl: Watchlist) -> None:
     from stock_picking.watchlist import WatchlistEntry
 

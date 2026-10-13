@@ -1,10 +1,9 @@
 import streamlit as st
 
 from stock_picking.data.cache import Cache
-from stock_picking.data.fetcher import fetch_all
+from stock_picking.refresh import refresh_valuations
 from stock_picking.settings import Settings
 from stock_picking.ui.presenter import build_dashboard_rows
-from stock_picking.valuator import valuate
 from stock_picking.watchlist import Watchlist
 
 _DB_PATH = "stock_picking.db"
@@ -18,7 +17,9 @@ def _get_services() -> tuple[Watchlist, Cache, Settings]:
     return watchlist, cache, settings
 
 
-def _run_refresh(watchlist: Watchlist, cache: Cache, settings: Settings) -> None:
+def _run_refresh(
+    watchlist: Watchlist, cache: Cache, settings: Settings, force_refresh: bool
+) -> None:
     tickers = watchlist.tickers()
     if not tickers:
         st.warning("Watchlist is empty. Add tickers below first.")
@@ -29,17 +30,14 @@ def _run_refresh(watchlist: Watchlist, cache: Cache, settings: Settings) -> None
     def _on_progress(done: int, total: int) -> None:
         progress.progress(done / total, text=f"Fetched {done}/{total}")
 
-    financials = fetch_all(tickers, cache, force_refresh=True, status_callback=_on_progress)
+    skipped = refresh_valuations(
+        tickers, watchlist, cache, settings,
+        force_refresh=force_refresh, status_callback=_on_progress,
+    )
     progress.empty()
 
-    for ticker in tickers:
-        fin = financials.get(ticker)
-        if fin is None:
-            st.warning(f"Could not fetch data for {ticker} — skipping.")
-            continue
-        overrides = watchlist.get_overrides(ticker)
-        result = valuate(fin, settings, overrides)
-        watchlist.save_valuation(result)
+    for ticker in skipped:
+        st.warning(f"Could not fetch data for {ticker} — skipping.")
 
     st.success("Refresh complete.")
 
@@ -67,7 +65,14 @@ def main() -> None:
 
         st.divider()
         if st.button("Refresh all", type="primary", use_container_width=True):
-            _run_refresh(watchlist, cache, settings)
+            _run_refresh(watchlist, cache, settings, force_refresh=False)
+            st.rerun()
+        if st.button(
+            "Force refresh",
+            use_container_width=True,
+            help="Ignore cached data and re-download everything.",
+        ):
+            _run_refresh(watchlist, cache, settings, force_refresh=True)
             st.rerun()
 
     valuations = watchlist.get_valuations()

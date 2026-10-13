@@ -1,4 +1,6 @@
 import math
+from datetime import UTC, datetime, tzinfo
+from unittest.mock import patch
 
 import pytest
 
@@ -178,3 +180,24 @@ def test_all_models_unavailable_returns_none_composite_and_na_signal(fin: Financ
     assert result.master_score is None
     assert result.buy_target is None
     assert result.signal == "N/A"
+
+
+def test_each_valuation_gets_its_own_calculation_time(fin: FinancialData) -> None:
+    # Fake clock: each datetime.now() call returns the next tick, so the two
+    # valuations are "created at different times" without sleeping.
+    ticks = iter([
+        datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
+        datetime(2026, 1, 1, 9, 5, tzinfo=UTC),
+    ])
+
+    class _FakeClock(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> datetime:  # type: ignore[override]
+            return next(ticks)
+
+    with patch("stock_picking.watchlist.datetime", _FakeClock):
+        first = valuate(fin, Settings())
+        second = valuate(fin, Settings())
+
+    assert first.calculated_at == datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+    assert second.calculated_at == datetime(2026, 1, 1, 9, 5, tzinfo=UTC)

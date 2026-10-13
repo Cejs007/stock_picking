@@ -69,7 +69,7 @@ This opens a browser tab. From there:
 | --- | --- |
 | **Add a ticker** | Type a symbol (e.g. `AAPL`, `CEZ.PR`) in the sidebar and click **Add**. |
 | **Remove a ticker** | Click the **✕** next to it in the sidebar. |
-| **Fetch / recompute** | Click **Refresh all**. This re-downloads data for the whole watchlist and recomputes every valuation. |
+| **Fetch / recompute** | Click **Refresh all**. This recomputes every valuation, reusing cached data younger than `CACHE_TTL_HOURS` and downloading the rest. Click **Force refresh** to ignore the cache and re-download everything. |
 
 Tickers follow Yahoo Finance conventions — US tickers are bare (`MSFT`),
 non-US tickers carry an exchange suffix (`CEZ.PR`, `SAP.DE`, `7203.T`).

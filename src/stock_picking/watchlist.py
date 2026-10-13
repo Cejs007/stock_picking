@@ -49,7 +49,7 @@ class ValuationResult(BaseModel):
     buy_target: float | None = None
     signal: str
     warnings: list[str] = []
-    calculated_at: datetime = datetime.now(UTC)
+    calculated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Watchlist:

@@ -4,6 +4,20 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel
 
+_WATCHLIST_DDL = """
+    CREATE TABLE IF NOT EXISTS watchlist (
+        ticker TEXT PRIMARY KEY,
+        company_name TEXT,
+        currency TEXT,
+        mos_override REAL,
+        dcf_growth_override REAL,
+        dcf_wacc_override REAL,
+        dcf_terminal_g REAL,
+        dcf_years INTEGER,
+        added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+"""
+
 
 class WatchlistEntry(BaseModel):
     ticker: str
@@ -16,8 +30,8 @@ class TickerOverrides(BaseModel):
     mos_override: float | None = None
     dcf_growth_override: float | None = None
     dcf_wacc_override: float | None = None
-    dcf_terminal_g: float = 0.03
-    dcf_years: int = 10
+    dcf_terminal_g: float | None = None
+    dcf_years: int | None = None
 
 
 class ValuationResult(BaseModel):
@@ -54,20 +68,32 @@ class Watchlist:
                 calculated_at TEXT NOT NULL
             )
         """)
-        self._conn.execute("""
-            CREATE TABLE IF NOT EXISTS watchlist (
-                ticker TEXT PRIMARY KEY,
-                company_name TEXT,
-                currency TEXT,
-                mos_override REAL,
-                dcf_growth_override REAL,
-                dcf_wacc_override REAL,
-                dcf_terminal_g REAL NOT NULL DEFAULT 0.03,
-                dcf_years INTEGER NOT NULL DEFAULT 10,
-                added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        self._conn.execute(_WATCHLIST_DDL)
         self._conn.commit()
+        self._migrate_nullable_dcf_overrides()
+
+    def _migrate_nullable_dcf_overrides(self) -> None:
+        # Before #18 these columns were NOT NULL DEFAULT 0.03 / 10, so "never set"
+        # was stored as the old hardcoded default. Rebuild them nullable and treat
+        # those exact values as unset, so the global Settings apply.
+        notnull = {r[1]: r[3] for r in self._conn.execute("PRAGMA table_info(watchlist)")}
+        if not notnull.get("dcf_terminal_g"):
+            return
+        self._conn.executescript(f"""
+            BEGIN;
+            ALTER TABLE watchlist RENAME TO watchlist_legacy;
+            {_WATCHLIST_DDL};
+            INSERT INTO watchlist (
+                ticker, company_name, currency, mos_override, dcf_growth_override,
+                dcf_wacc_override, dcf_terminal_g, dcf_years, added_at
+            )
+            SELECT ticker, company_name, currency, mos_override, dcf_growth_override,
+                   dcf_wacc_override, NULLIF(dcf_terminal_g, 0.03), NULLIF(dcf_years, 10),
+                   added_at
+            FROM watchlist_legacy;
+            DROP TABLE watchlist_legacy;
+            COMMIT;
+        """)
 
     def add(self, ticker: str, company_name: str | None = None, currency: str | None = None) -> None:
         self._conn.execute(

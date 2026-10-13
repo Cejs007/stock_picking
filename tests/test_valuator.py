@@ -89,6 +89,41 @@ def test_growth_rate_override_flows_into_dcf(fin: FinancialData) -> None:
     assert result_zero_g.fair_value_dcf < result_auto.fair_value_dcf
 
 
+def test_unset_terminal_g_and_years_fall_back_to_settings(fin: FinancialData) -> None:
+    # FCF/share = 100/10 = 10, g = 0, WACC 10%, terminal g 5% (settings), 1 year (settings):
+    #   PV(FCF) = 10/1.1; TV = 10*1.05/(0.10-0.05) = 210; PV(TV) = 210/1.1
+    #   DCF = 220/1.1 = 200.0
+    settings = Settings(default_terminal_g=0.05, default_projection_years=1)
+    result = valuate(fin, settings, TickerOverrides(dcf_growth_override=0.0))
+    assert result.fair_value_dcf == pytest.approx(200.0)
+
+
+def test_explicit_terminal_g_and_years_override_settings(fin: FinancialData) -> None:
+    # g = 0, WACC 10%, terminal g 5% (override), 2 years (override):
+    #   PV(FCF) = 10/1.1 + 10/1.21; TV = 210; PV(TV) = 210/1.21
+    #   DCF = (10*1.1 + 10 + 210)/1.21 = 231/1.21 ≈ 190.9091
+    settings = Settings(default_terminal_g=0.0, default_projection_years=10)
+    overrides = TickerOverrides(dcf_growth_override=0.0, dcf_terminal_g=0.05, dcf_years=2)
+    result = valuate(fin, settings, overrides)
+    assert result.fair_value_dcf == pytest.approx(231 / 1.21)
+
+
+def test_terminal_g_override_alone_keeps_settings_years(fin: FinancialData) -> None:
+    # terminal g 5% from override, 2 years from settings -> 231/1.21 ≈ 190.9091 (as above)
+    settings = Settings(default_terminal_g=0.0, default_projection_years=2)
+    overrides = TickerOverrides(dcf_growth_override=0.0, dcf_terminal_g=0.05)
+    result = valuate(fin, settings, overrides)
+    assert result.fair_value_dcf == pytest.approx(231 / 1.21)
+
+
+def test_years_override_alone_keeps_settings_terminal_g(fin: FinancialData) -> None:
+    # 1 year from override, terminal g 5% from settings -> 220/1.1 = 200.0
+    settings = Settings(default_terminal_g=0.05, default_projection_years=10)
+    overrides = TickerOverrides(dcf_growth_override=0.0, dcf_years=1)
+    result = valuate(fin, settings, overrides)
+    assert result.fair_value_dcf == pytest.approx(200.0)
+
+
 def test_one_model_unavailable_composite_from_remaining(fin: FinancialData) -> None:
     # eps_ttm=None → Graham and P/E both N/A; composite uses only EV/EBITDA + DCF
     no_eps = fin.model_copy(update={"eps_ttm": None})

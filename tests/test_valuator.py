@@ -150,6 +150,18 @@ def test_unconverted_fundamentals_give_na_signal_with_reason(fin: FinancialData)
     assert any("EUR" in w and "USD" in w and "not converted" in w for w in result.warnings)
 
 
+def test_unknown_statement_currency_gives_na_signal_with_reason(fin: FinancialData) -> None:
+    # Cache entries written before financial_currency existed load with None:
+    # we can't tell whether the totals are in the quote currency.
+    cheap = fin.model_copy(update={"current_price": 1.0, "financial_currency": None})
+    result = valuate(cheap, Settings())
+
+    assert result.signal == "N/A"
+    assert result.fair_value_composite is None
+    assert result.master_score is None
+    assert any("Statement currency unknown" in w for w in result.warnings)
+
+
 def test_matching_currencies_produce_no_currency_warning(fin: FinancialData) -> None:
     matched = fin.model_copy(update={"currency": "USD", "financial_currency": "USD"})
     result = valuate(matched, Settings())

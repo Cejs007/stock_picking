@@ -7,8 +7,8 @@ class FinancialData(BaseModel):
     # Quote currency: the currency of current_price.
     currency: str = "USD"
     # Statement currency: the currency of the fields marked "statement currency"
-    # below (FCF, EBITDA, EV, debt, cash). None = unknown, assumed equal to
-    # `currency`.
+    # below (FCF, EBITDA, EV, debt, cash). None = unknown (e.g. cached before
+    # this field existed); the valuator then returns N/A with a warning.
     financial_currency: str | None = None
     # GICS-style sector string from the data provider (e.g. "Technology",
     # "Financial Services"). Drives which ensemble template the valuator uses.

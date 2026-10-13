@@ -40,6 +40,7 @@ def fin() -> FinancialData:
         ticker="TEST",
         company_name="Test Corp",
         currency="USD",
+        financial_currency="USD",
         current_price=100.0,
         eps_ttm=5.0,
         bvps=40.0,

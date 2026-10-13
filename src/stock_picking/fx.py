@@ -32,6 +32,21 @@ def needs_conversion(fin: FinancialData) -> bool:
     return fin.financial_currency is not None and fin.financial_currency != fin.currency
 
 
+def unresolved_currency_reason(fin: FinancialData) -> str | None:
+    """Why statement totals can't be compared with the price, or None if they can."""
+    if fin.financial_currency is None:
+        return (
+            f"Statement currency unknown, so fundamentals may not be in {fin.currency};"
+            " refresh to re-fetch"
+        )
+    if needs_conversion(fin):
+        return (
+            f"Fundamentals are in {fin.financial_currency} but the price is in"
+            f" {fin.currency}; FX rate unavailable, values not converted"
+        )
+    return None
+
+
 def convert_to_quote_currency(fin: FinancialData, rate: float) -> FinancialData:
     """Convert the statement-currency fields (FCF, EBITDA, EV, debt, cash) to quote currency.
 

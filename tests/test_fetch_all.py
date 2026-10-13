@@ -171,6 +171,24 @@ def test_fx_unavailable_returns_unconverted_and_valuation_warns() -> None:
     assert any("EUR" in w and "not converted" in w for w in valuation.warnings)
 
 
+def test_cached_payload_without_statement_currency_warns_instead_of_valuing() -> None:
+    # Written by a version before financial_currency existed.
+    cache = Cache(db_path=":memory:")
+    cache.set("TSM", "financials", {"ticker": "TSM", "currency": "USD",
+                                    "current_price": 1.0, "eps_ttm": 8.0, "cash": 3500.0})
+    with (
+        patch("stock_picking.data.fetcher.fetch") as mock_fetch,
+        patch("stock_picking.data.fetcher.yf.Ticker") as yt,
+    ):
+        fin = fetch_all(["TSM"], cache)["TSM"]
+
+    mock_fetch.assert_not_called()
+    yt.assert_not_called()
+    valuation = valuate(fin, Settings())
+    assert valuation.signal == "N/A"
+    assert any("Statement currency unknown" in w for w in valuation.warnings)
+
+
 def test_usd_statements_with_pence_quote_are_converted_into_pence() -> None:
     # SHEL.L: statements in USD, quoted in GBp. Yahoo's USDGBp=X returns pounds,
     # so the boundary must fetch USDGBP=X and scale into pence itself.

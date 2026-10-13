@@ -64,7 +64,12 @@ def _initial_growth(data: FinancialData, config: ModelConfig) -> tuple[float, li
         return config.growth_rate_override, []
     first, last = data.fcf_history[0], data.fcf_history[-1]
     n = len(data.fcf_history)
-    g = (last / first) ** (1 / (n - 1)) - 1 if n >= 2 and first > 0 and last > 0 else 0.0
+    if n < 2 or first <= 0 or last <= 0:
+        return 0.0, [
+            "FCF growth cannot be derived (needs 2+ years with positive first and last "
+            "FCF); using 0.0% initial growth for DCF"
+        ]
+    g = (last / first) ** (1 / (n - 1)) - 1
     clamped = min(max(g, config.auto_growth_min), config.auto_growth_max)
     if clamped != g:
         return clamped, [f"Auto-derived FCF growth {g:.1%} clamped to {clamped:.1%} for DCF"]

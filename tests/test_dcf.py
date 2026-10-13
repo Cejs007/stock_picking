@@ -123,6 +123,19 @@ def test_auto_growth_bounds_are_configurable(
     assert "30.0%" in warnings[0]
 
 
+def test_auto_growth_min_is_configurable(
+    debt_free: FinancialData, two_year_cfg: ModelConfig
+) -> None:
+    # CAGR -42.3% → clamped to configured min -20%; base = avg(30, 20, 10) = 20
+    # 20 * 0.8 / 0.07 = 16 / 0.07 = 228.571
+    data = debt_free.model_copy(update={"fcf_history": [30.0, 20.0, 10.0]})
+    result, warnings = calculate(
+        data, two_year_cfg.model_copy(update={"auto_growth_min": -0.20})
+    )
+    assert result == pytest.approx(228.571, rel=1e-4)
+    assert "-20.0%" in warnings[0]
+
+
 @pytest.fixture
 def v2_fin(fin: FinancialData) -> FinancialData:
     # Base FCF = avg(90, 100, 110) = 100 (total); debt 300, cash 100, 10 shares
@@ -203,6 +216,26 @@ def test_non_positive_average_fcf_returns_none(
     result, warnings = calculate(fin.model_copy(update={"fcf_history": [100.0, -50.0, -80.0]}), cfg)
     assert result is None
     assert any("FCF" in w for w in warnings)
+
+
+def test_zero_average_fcf_returns_none(debt_free: FinancialData, cfg: ModelConfig) -> None:
+    # avg(100, -50, -50) = 0 exactly → N/A at the FCF guard, not later at the equity guard
+    data = debt_free.model_copy(update={"fcf_history": [100.0, -50.0, -50.0]})
+    result, warnings = calculate(data, cfg)
+    assert result is None
+    assert "Average FCF" in warnings[0]
+
+
+def test_underivable_growth_falls_back_to_zero_with_warning(
+    debt_free: FinancialData, two_year_cfg: ModelConfig
+) -> None:
+    # Last FCF -10 → no CAGR, g0 = 0%; base = avg(100, 120, -10) = 70
+    # 70 * 1.0 / 0.07 = 1000
+    data = debt_free.model_copy(update={"fcf_history": [100.0, 120.0, -10.0]})
+    result, warnings = calculate(data, two_year_cfg)
+    assert result == pytest.approx(1000.0, rel=1e-4)
+    assert len(warnings) == 1
+    assert "growth" in warnings[0] and "0.0%" in warnings[0]
 
 
 def test_debt_exceeding_enterprise_value_returns_none(

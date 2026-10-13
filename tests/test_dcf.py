@@ -113,3 +113,16 @@ def test_auto_growth_bounds_are_configurable(
     )
     assert result == pytest.approx(371.429, rel=1e-4)
     assert "30.0%" in warnings[0]
+
+
+def test_auto_growth_min_is_configurable(
+    fin: FinancialData, one_year_cfg: ModelConfig
+) -> None:
+    # CAGR -50% → clamped to configured min -20%; base FCF/share = 10
+    # 10 * 0.8 / 0.07 = 8 / 0.07 = 114.286
+    data = fin.model_copy(update={"fcf_history": [20.0, 10.0], "shares_outstanding": 1.0})
+    result, warnings = calculate(
+        data, one_year_cfg.model_copy(update={"auto_growth_min": -0.20})
+    )
+    assert result == pytest.approx(114.286, rel=1e-4)
+    assert "-20.0%" in warnings[0]

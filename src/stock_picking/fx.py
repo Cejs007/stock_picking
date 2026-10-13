@@ -1,5 +1,32 @@
 from stock_picking.data.models import FinancialData
 
+# Minor-unit quote codes used by Yahoo -> (major currency, minor units per major).
+_MINOR_UNITS: dict[str, tuple[str, float]] = {
+    "GBp": ("GBP", 100.0),
+    "GBX": ("GBP", 100.0),
+    "ZAc": ("ZAR", 100.0),
+    "ILA": ("ILS", 100.0),
+}
+
+
+def major_currency(code: str) -> tuple[str, float]:
+    """(major currency, minor units per 1 major unit); a major code maps to (code, 1.0)."""
+    return _MINOR_UNITS.get(code, (code, 1.0))
+
+
+def fx_pair(from_currency: str, to_currency: str) -> tuple[str, str] | None:
+    """Major-currency pair whose market rate is needed, or None if they differ only by unit."""
+    from_major, _ = major_currency(from_currency)
+    to_major, _ = major_currency(to_currency)
+    return None if from_major == to_major else (from_major, to_major)
+
+
+def quote_rate(from_currency: str, to_currency: str, major_rate: float = 1.0) -> float:
+    """Units of `to_currency` per 1 `from_currency`, given the rate between their majors."""
+    _, from_minor = major_currency(from_currency)
+    _, to_minor = major_currency(to_currency)
+    return major_rate * to_minor / from_minor
+
 
 def needs_conversion(fin: FinancialData) -> bool:
     return fin.financial_currency is not None and fin.financial_currency != fin.currency

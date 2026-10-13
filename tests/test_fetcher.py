@@ -171,3 +171,18 @@ def test_old_cache_payload_without_financial_currency_still_loads() -> None:
     old_payload = {"ticker": "AAPL", "currency": "USD", "current_price": 150.0}
     fin = FinancialData.model_validate(old_payload)
     assert fin.financial_currency is None
+
+
+def test_per_share_fields_scaled_into_minor_unit_quote() -> None:
+    # SHEL.L: price 3865.5 GBp, but yfinance trailingEps / bookValue are in GBP
+    # (live: 3865.5 / 100 / 3.38 == trailingPE 11.44).
+    info = {**_SAMPLE_INFO, "currentPrice": 3865.5, "currency": "GBp",
+            "financialCurrency": "USD", "trailingEps": 3.38, "bookValue": 24.56}
+    with patch("stock_picking.data.fetcher.yf.Ticker", return_value=_make_ticker(info=info)):
+        result = fetch("SHEL.L")
+
+    # 3.38 GBP * 100 = 338 GBp; 24.56 GBP * 100 = 2456 GBp
+    assert result.eps_ttm == pytest.approx(338.0)
+    assert result.bvps == pytest.approx(2456.0)
+    # Statement totals are left for the FX step (USD here).
+    assert result.cash == 10_000.0

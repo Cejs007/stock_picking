@@ -8,7 +8,13 @@ from pydantic import BaseModel, Field, ValidationError
 
 from stock_picking.data.cache import Cache
 from stock_picking.data.models import FinancialData
-from stock_picking.fx import convert_to_quote_currency, needs_conversion
+from stock_picking.fx import (
+    convert_to_quote_currency,
+    fx_pair,
+    major_currency,
+    needs_conversion,
+    quote_rate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +39,21 @@ def fetch(ticker: str) -> FinancialData:
     if not price:
         raise FetchError(f"No price available for {ticker!r}")
 
+    currency = info.get("currency", "USD")
+    # Minor-unit listings (GBp, ZAc, ILA) are priced in pence/cents, but yfinance
+    # reports per-share fields in the major unit (SHEL.L: price / 100 / trailingEps
+    # == trailingPE), so bring them into the quote's unit.
+    _, minor_per_major = major_currency(currency)
+
     return FinancialData(
         ticker=ticker,
         company_name=info.get("longName"),
-        currency=info.get("currency", "USD"),
+        currency=currency,
         financial_currency=info.get("financialCurrency"),
         sector=info.get("sector"),
         current_price=float(price),
-        eps_ttm=_optional_float(info.get("trailingEps")),
-        bvps=_optional_float(info.get("bookValue")),
+        eps_ttm=_scaled(_optional_float(info.get("trailingEps")), minor_per_major),
+        bvps=_scaled(_optional_float(info.get("bookValue")), minor_per_major),
         shares_outstanding=_optional_float(info.get("sharesOutstanding")),
         ebitda=_optional_float(info.get("ebitda")),
         ev=_optional_float(info.get("enterpriseValue")),
@@ -98,15 +110,25 @@ def _in_quote_currency(fin: FinancialData, cache: Cache, force_refresh: bool) ->
     # sees the currency mismatch and warns.
     if not needs_conversion(fin) or fin.financial_currency is None:
         return fin
-    pair = f"{fin.financial_currency}{fin.currency}=X"
-    cached = None if force_refresh else cache.get(pair, "fx_rate", ttl_hours=FX_RATE_TTL_HOURS)
+    pair = fx_pair(fin.financial_currency, fin.currency)
+    major_rate = 1.0 if pair is None else _cached_fx_rate(*pair, cache, force_refresh)
+    if major_rate is None:
+        return fin
+    rate = quote_rate(fin.financial_currency, fin.currency, major_rate)
+    return convert_to_quote_currency(fin, rate)
+
+
+def _cached_fx_rate(
+    from_currency: str, to_currency: str, cache: Cache, force_refresh: bool
+) -> float | None:
+    key = f"{from_currency}{to_currency}=X"
+    cached = None if force_refresh else cache.get(key, "fx_rate", ttl_hours=FX_RATE_TTL_HOURS)
     if cached is not None:
-        rate: float | None = _FxRate.model_validate(cached).rate
-    else:
-        rate = fetch_fx_rate(fin.financial_currency, fin.currency)
-        if rate is not None:
-            cache.set(pair, "fx_rate", {"rate": rate})
-    return convert_to_quote_currency(fin, rate) if rate is not None else fin
+        return _FxRate.model_validate(cached).rate
+    rate = fetch_fx_rate(from_currency, to_currency)
+    if rate is not None:
+        cache.set(key, "fx_rate", {"rate": rate})
+    return rate
 
 
 def fetch_fx_rate(
@@ -136,6 +158,10 @@ def fetch_fx_rate(
 
 def _optional_float(value: object) -> float | None:
     return float(value) if value is not None else None
+
+
+def _scaled(value: float | None, factor: float) -> float | None:
+    return value * factor if value is not None else None
 
 
 def _fcf_history(ticker: yf.Ticker) -> list[float]:

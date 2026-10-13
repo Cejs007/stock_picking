@@ -1,7 +1,7 @@
 import pytest
 
 from stock_picking.data.models import FinancialData
-from stock_picking.fx import convert_to_quote_currency
+from stock_picking.fx import convert_to_quote_currency, fx_pair, quote_rate
 
 
 @pytest.fixture
@@ -83,3 +83,44 @@ def test_same_currency_is_noop(twd_statements_usd_quote: FinancialData) -> None:
 def test_unknown_financial_currency_is_noop(twd_statements_usd_quote: FinancialData) -> None:
     unknown = twd_statements_usd_quote.model_copy(update={"financial_currency": None})
     assert convert_to_quote_currency(unknown, 1.1) == unknown
+
+
+@pytest.mark.parametrize(
+    ("from_ccy", "to_ccy", "pair"),
+    [
+        ("EUR", "USD", ("EUR", "USD")),
+        # Minor-unit quotes are normalised to their major currency; Yahoo
+        # returns USDGBp=X in pounds and has no ILA=X pair at all.
+        ("USD", "GBp", ("USD", "GBP")),
+        ("USD", "GBX", ("USD", "GBP")),
+        ("USD", "ZAc", ("USD", "ZAR")),
+        ("USD", "ILA", ("USD", "ILS")),
+    ],
+)
+def test_fx_pair_uses_major_currencies(from_ccy: str, to_ccy: str, pair: tuple[str, str]) -> None:
+    assert fx_pair(from_ccy, to_ccy) == pair
+
+
+@pytest.mark.parametrize(("from_ccy", "to_ccy"), [("GBP", "GBp"), ("ZAR", "ZAc"), ("CZK", "CZK")])
+def test_fx_pair_is_none_when_currencies_differ_only_by_unit(from_ccy: str, to_ccy: str) -> None:
+    assert fx_pair(from_ccy, to_ccy) is None
+
+
+@pytest.mark.parametrize(
+    ("from_ccy", "to_ccy", "major_rate", "expected"),
+    [
+        # 0.75 GBP per USD * 100 pence per GBP = 75 GBp per USD
+        ("USD", "GBp", 0.75, 75.0),
+        # 16.5 ZAR per USD * 100 cents per ZAR = 1650 ZAc per USD
+        ("USD", "ZAc", 16.5, 1650.0),
+        # GBP statements, GBp quote: no market rate, 1 GBP = 100 GBp
+        ("GBP", "GBp", 1.0, 100.0),
+        # Plain major pair passes the market rate through
+        ("EUR", "USD", 1.1, 1.1),
+        ("CZK", "CZK", 1.0, 1.0),
+    ],
+)
+def test_quote_rate_scales_into_minor_unit(
+    from_ccy: str, to_ccy: str, major_rate: float, expected: float
+) -> None:
+    assert quote_rate(from_ccy, to_ccy, major_rate) == pytest.approx(expected)

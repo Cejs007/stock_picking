@@ -45,3 +45,15 @@ def test_adr_eps_is_not_double_converted() -> None:
     fin = fetch_all(["TSM"], Cache(db_path=":memory:"))["TSM"]
     assert fin.eps_ttm is not None
     assert 5 < fin.current_price / fin.eps_ttm < 100
+
+
+def test_pence_quote_gets_fundamentals_in_pence() -> None:
+    # SHEL.L: quoted in GBp, reports in USD. Without minor-unit handling P/E
+    # lands ~100x off and cash per share is in pounds instead of pence.
+    fin = fetch_all(["SHEL.L"], Cache(db_path=":memory:"))["SHEL.L"]
+    assert fin.currency == "GBp"
+    assert fin.financial_currency == "GBp"
+    assert fin.eps_ttm is not None and fin.shares_outstanding is not None
+    assert 3 < fin.current_price / fin.eps_ttm < 60
+    # Cash per share in pence is a sizeable fraction of a ~3000p price, not ~3.
+    assert fin.cash / fin.shares_outstanding > 100

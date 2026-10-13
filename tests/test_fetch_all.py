@@ -169,3 +169,36 @@ def test_fx_unavailable_returns_unconverted_and_valuation_warns() -> None:
     valuation = valuate(fin, Settings())
     assert valuation.currency == "USD"
     assert any("EUR" in w and "not converted" in w for w in valuation.warnings)
+
+
+def test_usd_statements_with_pence_quote_are_converted_into_pence() -> None:
+    # SHEL.L: statements in USD, quoted in GBp. Yahoo's USDGBp=X returns pounds,
+    # so the boundary must fetch USDGBP=X and scale into pence itself.
+    cache = Cache(db_path=":memory:")
+    shel = FinancialData(ticker="SHEL.L", currency="GBp", financial_currency="USD",
+                         current_price=3800.0, cash=100.0)
+    with (
+        patch("stock_picking.data.fetcher.fetch", return_value=shel),
+        patch("stock_picking.data.fetcher.yf.Ticker", return_value=_fx_ticker(0.75)) as yt,
+    ):
+        result = fetch_all(["SHEL.L"], cache)
+
+    yt.assert_called_once_with("USDGBP=X")
+    # 100 USD * 0.75 GBP/USD * 100 GBp/GBP = 7500 GBp
+    assert result["SHEL.L"].cash == pytest.approx(7500.0)
+    assert result["SHEL.L"].financial_currency == "GBp"
+
+
+def test_gbp_statements_with_pence_quote_scale_without_fx_request() -> None:
+    cache = Cache(db_path=":memory:")
+    tsco = FinancialData(ticker="TSCO.L", currency="GBp", financial_currency="GBP",
+                         current_price=500.0, cash=100.0)
+    with (
+        patch("stock_picking.data.fetcher.fetch", return_value=tsco),
+        patch("stock_picking.data.fetcher.yf.Ticker") as yt,
+    ):
+        result = fetch_all(["TSCO.L"], cache)
+
+    yt.assert_not_called()
+    # 100 GBP * 100 GBp/GBP = 10000 GBp
+    assert result["TSCO.L"].cash == pytest.approx(10000.0)

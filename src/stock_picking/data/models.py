@@ -14,8 +14,9 @@ class FinancialData(BaseModel):
     # "Financial Services"). Drives which ensemble template the valuator uses.
     sector: str | None = None
     current_price: float
-    # Per share, quote currency. yfinance reports trailingEps / bookValue in the
-    # quote currency even for ADRs (TSM: price / trailingEps == trailingPE).
+    # Per share, quote currency (in pence/cents for GBp, ZAc, ILA quotes).
+    # yfinance reports trailingEps / bookValue in the quote currency even for
+    # ADRs (TSM: price / trailingEps == trailingPE).
     eps_ttm: float | None = None
     bvps: float | None = None
     # Total FCF per year, oldest first (e.g. 5+ years), statement currency.

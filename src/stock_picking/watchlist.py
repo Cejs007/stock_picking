@@ -28,11 +28,20 @@ class ValuationResult(BaseModel):
     fair_value_ev_ebitda: float | None = None
     fair_value_composite: float | None = None
     current_price: float
+    # Quote currency of current_price and every fair value above. None only for
+    # rows saved before the currency column existed.
+    currency: str | None = None
     master_score: float | None = None
     buy_target: float | None = None
     signal: str
     warnings: list[str] = []
     calculated_at: datetime = datetime.now(UTC)
+
+
+def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+    existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
 class Watchlist:
@@ -67,6 +76,7 @@ class Watchlist:
                 added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        _add_column_if_missing(self._conn, "valuations", "currency", "TEXT")
         self._conn.commit()
 
     def add(self, ticker: str, company_name: str | None = None, currency: str | None = None) -> None:
@@ -151,8 +161,9 @@ class Watchlist:
             INSERT INTO valuations (
                 ticker, fair_value_dcf, fair_value_graham, fair_value_pe,
                 fair_value_ev_ebitda, fair_value_composite, current_price,
-                master_score, buy_target, signal, warnings, calculated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                master_score, buy_target, signal, warnings, calculated_at,
+                currency
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ticker) DO UPDATE SET
                 fair_value_dcf = excluded.fair_value_dcf,
                 fair_value_graham = excluded.fair_value_graham,
@@ -164,7 +175,8 @@ class Watchlist:
                 buy_target = excluded.buy_target,
                 signal = excluded.signal,
                 warnings = excluded.warnings,
-                calculated_at = excluded.calculated_at
+                calculated_at = excluded.calculated_at,
+                currency = excluded.currency
             """,
             (
                 result.ticker,
@@ -179,6 +191,7 @@ class Watchlist:
                 result.signal,
                 json.dumps(result.warnings),
                 result.calculated_at.isoformat(),
+                result.currency,
             ),
         )
         self._conn.commit()
@@ -188,7 +201,8 @@ class Watchlist:
             """
             SELECT ticker, fair_value_dcf, fair_value_graham, fair_value_pe,
                    fair_value_ev_ebitda, fair_value_composite, current_price,
-                   master_score, buy_target, signal, warnings, calculated_at
+                   master_score, buy_target, signal, warnings, calculated_at,
+                   currency
             FROM valuations
             """
         ).fetchall()
@@ -206,6 +220,7 @@ class Watchlist:
                 signal=r[9],
                 warnings=json.loads(r[10]),
                 calculated_at=datetime.fromisoformat(r[11]),
+                currency=r[12],
             )
             for r in rows
         ]

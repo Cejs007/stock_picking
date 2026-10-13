@@ -8,9 +8,11 @@ _CURRENCY_SYMBOLS: dict[str, str] = {
 }
 
 
-def format_currency(value: float | None, currency: str = "USD") -> str:
+def format_currency(value: float | None, currency: str | None = "USD") -> str:
     if value is None:
         return "N/A"
+    if currency is None:
+        return f"{value:.2f}"
     symbol = _CURRENCY_SYMBOLS.get(currency, f"{currency} ")
     return f"{symbol}{value:.2f}"
 
@@ -22,7 +24,7 @@ def build_dashboard_rows(results: list[ValuationResult]) -> list[dict]:
     )
     rows = []
     for r in sorted_results:
-        currency = "USD"
+        currency = r.currency
         rows.append({
             "Ticker": r.ticker,
             "Price": format_currency(r.current_price, currency),

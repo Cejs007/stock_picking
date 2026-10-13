@@ -118,3 +118,23 @@ def test_all_models_unavailable_returns_none_composite_and_na_signal(fin: Financ
     assert result.master_score is None
     assert result.buy_target is None
     assert result.signal == "N/A"
+
+
+def test_result_carries_quote_currency(fin: FinancialData) -> None:
+    czk = fin.model_copy(update={"currency": "CZK", "financial_currency": "CZK"})
+    result = valuate(czk, Settings())
+    assert result.currency == "CZK"
+
+
+def test_unconverted_fundamentals_produce_currency_warning(fin: FinancialData) -> None:
+    # FX rate was unavailable upstream: statements still in EUR, quote in USD.
+    mismatched = fin.model_copy(update={"currency": "USD", "financial_currency": "EUR"})
+    result = valuate(mismatched, Settings())
+    assert result.fair_value_composite is not None
+    assert any("EUR" in w and "USD" in w for w in result.warnings)
+
+
+def test_matching_currencies_produce_no_currency_warning(fin: FinancialData) -> None:
+    matched = fin.model_copy(update={"currency": "USD", "financial_currency": "USD"})
+    result = valuate(matched, Settings())
+    assert not any("currency" in w.lower() for w in result.warnings)

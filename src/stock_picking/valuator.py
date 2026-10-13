@@ -1,4 +1,5 @@
 from stock_picking.data.models import FinancialData, ModelConfig
+from stock_picking.fx import needs_conversion
 from stock_picking.models import dcf, ev_ebitda, graham, pe_relative
 from stock_picking.models.composite import calculate_composite
 from stock_picking.settings import Settings
@@ -26,6 +27,11 @@ def valuate(
 
     weights = settings.weights_for(fin.sector)
     composite, _active, all_warnings = calculate_composite(results, weights)
+    if needs_conversion(fin):
+        all_warnings.append(
+            f"Fundamentals are in {fin.financial_currency} but the price is in"
+            f" {fin.currency}; FX rate unavailable, values not converted"
+        )
 
     if composite is not None:
         master_score = (composite - fin.current_price) / fin.current_price * 100
@@ -44,6 +50,7 @@ def valuate(
         fair_value_dcf=results["dcf"][0],
         fair_value_composite=composite,
         current_price=fin.current_price,
+        currency=fin.currency,
         master_score=master_score,
         buy_target=buy_target,
         signal=signal,

@@ -50,6 +50,17 @@ def test_invalidate_does_not_affect_other_tickers(cache: Cache) -> None:
     assert cache.get("MSFT", "financials") == {"price": 400.0}
 
 
+def test_per_call_ttl_overrides_default_for_that_data_type() -> None:
+    t = 1_000_000.0
+    cache = Cache(db_path=":memory:", ttl_hours=24.0, _now=lambda: t)
+    cache.set("EURUSD=X", "fx_rate", {"rate": 1.1})
+    cache.set("AAPL", "financials", {"price": 150.0})
+    # 13 h later: past a 12 h FX TTL, still inside the 24 h default.
+    cache._now = lambda: t + 13 * 3600
+    assert cache.get("EURUSD=X", "fx_rate", ttl_hours=12.0) is None
+    assert cache.get("AAPL", "financials") == {"price": 150.0}
+
+
 def test_non_expired_entry_returns_data() -> None:
     t = 1_000_000.0
     cache = Cache(db_path=":memory:", ttl_hours=24.0, _now=lambda: t)

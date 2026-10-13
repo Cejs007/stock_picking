@@ -4,7 +4,11 @@ from pydantic import BaseModel, Field
 class FinancialData(BaseModel):
     ticker: str
     company_name: str | None = None
+    # Quote currency: the currency of current_price.
     currency: str = "USD"
+    # Statement currency of the monetary fundamentals below (EPS, BVPS, FCF,
+    # EBITDA, EV, debt, cash). None = unknown, assumed equal to `currency`.
+    financial_currency: str | None = None
     # GICS-style sector string from the data provider (e.g. "Technology",
     # "Financial Services"). Drives which ensemble template the valuator uses.
     sector: str | None = None

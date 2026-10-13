@@ -32,7 +32,8 @@ class Cache:
         )
         self._conn.commit()
 
-    def get(self, ticker: str, data_type: str) -> dict | None:
+    def get(self, ticker: str, data_type: str, ttl_hours: float | None = None) -> dict | None:
+        ttl = ttl_hours * 3600 if ttl_hours is not None else self._ttl
         with self._lock:
             row = self._conn.execute(
                 "SELECT data, cached_at FROM cache WHERE ticker = ? AND data_type = ?",
@@ -41,7 +42,7 @@ class Cache:
         if row is None:
             return None
         data, cached_at = row
-        if self._now() - cached_at > self._ttl:
+        if self._now() - cached_at > ttl:
             return None
         return json.loads(data)
 

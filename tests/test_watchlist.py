@@ -90,6 +90,19 @@ def test_fair_values_roundtrip_including_na_and_any_model_name(
     assert wl.get_valuations()[0].fair_values == fvs
 
 
+def test_non_finite_fair_values_are_stored_as_na(
+    wl: Watchlist, valuation: ValuationResult
+) -> None:
+    # A REAL column stored NaN as NULL; the JSON column must keep showing N/A, not "nan"
+    fvs = {"graham": float("nan"), "dcf": float("inf"), "pe_relative": 85.0}
+    wl.save_valuation(valuation.model_copy(update={"fair_values": fvs}))
+    assert wl.get_valuations()[0].fair_values == {
+        "graham": None,
+        "dcf": None,
+        "pe_relative": 85.0,
+    }
+
+
 def test_legacy_valuations_table_is_migrated_to_fair_values(tmp_path) -> None:
     db = tmp_path / "legacy.db"
     conn = sqlite3.connect(db)

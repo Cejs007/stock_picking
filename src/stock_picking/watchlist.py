@@ -1,4 +1,5 @@
 import json
+import math
 import sqlite3
 from datetime import UTC, datetime
 
@@ -204,7 +205,12 @@ class Watchlist:
             """,
             (
                 result.ticker,
-                json.dumps(result.fair_values),
+                json.dumps(
+                    {
+                        name: fv if fv is not None and math.isfinite(fv) else None
+                        for name, fv in result.fair_values.items()
+                    }
+                ),
                 result.fair_value_composite,
                 result.current_price,
                 result.master_score,

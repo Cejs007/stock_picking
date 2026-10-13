@@ -40,10 +40,7 @@ def test_format_percent_none_returns_na() -> None:
 def result() -> ValuationResult:
     return ValuationResult(
         ticker="AAPL",
-        fair_value_graham=130.0,
-        fair_value_pe=150.0,
-        fair_value_ev_ebitda=140.0,
-        fair_value_dcf=160.0,
+        fair_values={"graham": 130.0, "pe_relative": 150.0, "ev_ebitda": 140.0, "dcf": 160.0},
         fair_value_composite=145.0,
         current_price=100.0,
         master_score=45.0,

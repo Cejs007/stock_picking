@@ -193,4 +193,6 @@ def test_legacy_db_accepts_unset_overrides_after_load(tmp_path: Path) -> None:
     assert cez.dcf_terminal_g is None
     assert cez.dcf_years is None
     # reopening an already-migrated DB is a no-op
-    assert Watchlist(db_path=db).tickers() == wl.tickers()
+    reopened = Watchlist(db_path=db)
+    assert reopened.tickers() == wl.tickers()
+    assert reopened.get_overrides("CEZ.PR") == cez

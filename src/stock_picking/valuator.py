@@ -54,8 +54,16 @@ def _build_model_config(settings: Settings, overrides: TickerOverrides | None) -
         if overrides and overrides.dcf_wacc_override is not None
         else settings.default_wacc
     )
-    terminal_g = overrides.dcf_terminal_g if overrides else settings.default_terminal_g
-    proj_years = overrides.dcf_years if overrides else settings.default_projection_years
+    terminal_g = (
+        overrides.dcf_terminal_g
+        if overrides and overrides.dcf_terminal_g is not None
+        else settings.default_terminal_g
+    )
+    proj_years = (
+        overrides.dcf_years
+        if overrides and overrides.dcf_years is not None
+        else settings.default_projection_years
+    )
     growth_override = overrides.dcf_growth_override if overrides else None
 
     return ModelConfig(

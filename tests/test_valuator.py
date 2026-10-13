@@ -89,6 +89,52 @@ def test_growth_rate_override_flows_into_dcf(fin: FinancialData) -> None:
     assert result_zero_g.fair_value_dcf < result_auto.fair_value_dcf
 
 
+def test_unset_terminal_g_and_years_fall_back_to_settings(fin: FinancialData) -> None:
+    # Base FCF = avg(90, 95, 100) = 95, g0 = 0, WACC 10%, terminal g 5% (settings),
+    # 1 year (settings) so year-1 growth is already terminal 5%:
+    #   FCF1 = 95*1.05 = 99.75; TV = 99.75*1.05/0.05 = 2094.75
+    #   EV = (99.75 + 2094.75)/1.1 = 1995; minus net debt 20 → 1975/10 shares = 197.5
+    settings = Settings(default_terminal_g=0.05, default_projection_years=1)
+    result = valuate(fin, settings, TickerOverrides(dcf_growth_override=0.0))
+    assert result.fair_value_dcf == pytest.approx(197.5)
+
+
+def test_explicit_terminal_g_and_years_override_settings(fin: FinancialData) -> None:
+    # g0 = 0, WACC 10%, terminal g 5% (override), 2 years (override), growth [0%, 5%]:
+    #   FCF1 = 95; FCF2 = 99.75; TV = 2094.75
+    #   EV = (95*1.1 + 99.75 + 2094.75)/1.21 = 2299/1.21 = 1900; (1900 - 20)/10 = 188.0
+    settings = Settings(default_terminal_g=0.0, default_projection_years=10)
+    overrides = TickerOverrides(dcf_growth_override=0.0, dcf_terminal_g=0.05, dcf_years=2)
+    result = valuate(fin, settings, overrides)
+    assert result.fair_value_dcf == pytest.approx(188.0)
+
+
+def test_terminal_g_override_alone_keeps_settings_years(fin: FinancialData) -> None:
+    # terminal g 5% from override, 2 years from settings -> 188.0 (as above)
+    settings = Settings(default_terminal_g=0.0, default_projection_years=2)
+    overrides = TickerOverrides(dcf_growth_override=0.0, dcf_terminal_g=0.05)
+    result = valuate(fin, settings, overrides)
+    assert result.fair_value_dcf == pytest.approx(188.0)
+
+
+def test_zero_terminal_g_override_is_applied_not_treated_as_unset(fin: FinancialData) -> None:
+    # terminal g 0% from override (settings say 5%), 2 years, growth [0%, 0%]:
+    #   EV = (95*1.1 + 95 + 95/0.10)/1.21 = 1149.5/1.21 = 950; (950 - 20)/10 = 93.0
+    #   (settings' 5% would give 188.0)
+    settings = Settings(default_terminal_g=0.05, default_projection_years=2)
+    overrides = TickerOverrides(dcf_growth_override=0.0, dcf_terminal_g=0.0)
+    result = valuate(fin, settings, overrides)
+    assert result.fair_value_dcf == pytest.approx(93.0)
+
+
+def test_years_override_alone_keeps_settings_terminal_g(fin: FinancialData) -> None:
+    # 1 year from override, terminal g 5% from settings -> 197.5 (as in the first case)
+    settings = Settings(default_terminal_g=0.05, default_projection_years=10)
+    overrides = TickerOverrides(dcf_growth_override=0.0, dcf_years=1)
+    result = valuate(fin, settings, overrides)
+    assert result.fair_value_dcf == pytest.approx(197.5)
+
+
 def test_one_model_unavailable_composite_from_remaining(fin: FinancialData) -> None:
     # eps_ttm=None → Graham and P/E both N/A; composite uses only EV/EBITDA + DCF
     no_eps = fin.model_copy(update={"eps_ttm": None})

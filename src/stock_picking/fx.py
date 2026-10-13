@@ -6,10 +6,11 @@ def needs_conversion(fin: FinancialData) -> bool:
 
 
 def convert_to_quote_currency(fin: FinancialData, rate: float) -> FinancialData:
-    """Convert monetary fundamentals from statement currency to quote currency.
+    """Convert the statement-currency fields (FCF, EBITDA, EV, debt, cash) to quote currency.
 
-    `rate` is quote-currency units per 1 unit of statement currency. Price,
-    share count and multiples (P/E, EV/EBITDA) are currency-free and untouched.
+    `rate` is quote-currency units per 1 unit of statement currency. EPS and
+    BVPS are already in the quote currency; price, share count and multiples
+    (P/E, EV/EBITDA) are currency-free. All of those are untouched.
     """
     if not needs_conversion(fin):
         return fin
@@ -19,8 +20,6 @@ def convert_to_quote_currency(fin: FinancialData, rate: float) -> FinancialData:
 
     return fin.model_copy(update={
         "financial_currency": fin.currency,
-        "eps_ttm": _scale(fin.eps_ttm),
-        "bvps": _scale(fin.bvps),
         "fcf_history": [v * rate for v in fin.fcf_history],
         "ebitda": _scale(fin.ebitda),
         "ev": _scale(fin.ev),

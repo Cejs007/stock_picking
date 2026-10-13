@@ -86,8 +86,9 @@ def test_fundamentals_in_other_currency_are_converted_to_quote_currency() -> Non
 
     yt.assert_called_once_with("EURUSD=X")
     fin = result["ASML"]
-    # EUR -> USD at 1.1: EPS 2.0 * 1.1 = 2.2, cash 100 * 1.1 = 110; price untouched.
-    assert fin.eps_ttm == pytest.approx(2.2)
+    # EUR -> USD at 1.1: cash 100 * 1.1 = 110; EPS is already in the quote
+    # currency and price is the quote itself, so both stay untouched.
+    assert fin.eps_ttm == 2.0
     assert fin.cash == pytest.approx(110.0)
     assert fin.current_price == 700.0
     assert fin.financial_currency == "USD"
@@ -130,7 +131,8 @@ def test_fx_rate_is_cached_and_reused() -> None:
         second = fetch_all(["ASML", "SAP"], cache)
 
     assert yt.call_count == 1
-    assert second["SAP"].eps_ttm == pytest.approx(2.2)
+    # cash 100 EUR * 1.1 = 110 USD
+    assert second["SAP"].cash == pytest.approx(110.0)
 
 
 def test_fx_rate_expires_on_its_own_ttl_before_financials() -> None:
@@ -146,8 +148,8 @@ def test_fx_rate_expires_on_its_own_ttl_before_financials() -> None:
         result = fetch_all(["ASML"], cache)
 
     assert mock_fetch.call_count == 1
-    # Fresh rate 1.2: EPS 2.0 * 1.2 = 2.4
-    assert result["ASML"].eps_ttm == pytest.approx(2.4)
+    # Fresh rate 1.2: cash 100 * 1.2 = 120
+    assert result["ASML"].cash == pytest.approx(120.0)
 
 
 def test_fx_unavailable_returns_unconverted_and_valuation_warns() -> None:
@@ -160,7 +162,7 @@ def test_fx_unavailable_returns_unconverted_and_valuation_warns() -> None:
         result = fetch_all(["ASML"], cache)
 
     fin = result["ASML"]
-    assert fin.eps_ttm == 2.0
+    assert fin.cash == 100.0
     assert fin.financial_currency == "EUR"
     assert cache.get("EURUSD=X", "fx_rate") is None
 

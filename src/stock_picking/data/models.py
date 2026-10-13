@@ -6,17 +6,22 @@ class FinancialData(BaseModel):
     company_name: str | None = None
     # Quote currency: the currency of current_price.
     currency: str = "USD"
-    # Statement currency of the monetary fundamentals below (EPS, BVPS, FCF,
-    # EBITDA, EV, debt, cash). None = unknown, assumed equal to `currency`.
+    # Statement currency: the currency of the fields marked "statement currency"
+    # below (FCF, EBITDA, EV, debt, cash). None = unknown, assumed equal to
+    # `currency`.
     financial_currency: str | None = None
     # GICS-style sector string from the data provider (e.g. "Technology",
     # "Financial Services"). Drives which ensemble template the valuator uses.
     sector: str | None = None
     current_price: float
+    # Per share, quote currency. yfinance reports trailingEps / bookValue in the
+    # quote currency even for ADRs (TSM: price / trailingEps == trailingPE).
     eps_ttm: float | None = None
     bvps: float | None = None
-    # Total FCF per year, oldest first (e.g. 5+ years). Used for DCF CAGR derivation.
+    # Total FCF per year, oldest first (e.g. 5+ years), statement currency.
+    # Used for DCF CAGR derivation.
     fcf_history: list[float] = Field(default_factory=list)
+    # Totals, statement currency.
     ebitda: float | None = None
     ev: float | None = None
     total_debt: float = 0.0

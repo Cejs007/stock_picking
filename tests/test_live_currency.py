@@ -37,3 +37,11 @@ def test_adr_fundamentals_end_up_in_quote_currency() -> None:
     fin = fetch_all(["ASML"], Cache(db_path=":memory:"))["ASML"]
     assert fin.currency == "USD"
     assert fin.financial_currency == "USD"
+
+
+def test_adr_eps_is_not_double_converted() -> None:
+    # TSM: quoted in USD, reports in TWD, but yfinance trailingEps is already
+    # USD. A second TWD->USD conversion would push P/E to ~1000.
+    fin = fetch_all(["TSM"], Cache(db_path=":memory:"))["TSM"]
+    assert fin.eps_ttm is not None
+    assert 5 < fin.current_price / fin.eps_ttm < 100

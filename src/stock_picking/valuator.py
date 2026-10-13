@@ -25,7 +25,8 @@ def valuate(
         for name, model in MODEL_REGISTRY.items()
         if model.in_composite
     }
-    composite, _active, all_warnings = calculate_composite(results, composite_weights)
+    composite_result = calculate_composite(results, composite_weights)
+    composite = composite_result.fair_value
 
     if composite is not None:
         master_score = (composite - fin.current_price) / fin.current_price * 100
@@ -40,11 +41,14 @@ def valuate(
         ticker=fin.ticker,
         fair_values={name: value for name, (value, _) in results.items()},
         fair_value_composite=composite,
+        fair_value_low=composite_result.low,
+        fair_value_high=composite_result.high,
+        fair_value_cv=composite_result.cv,
         current_price=fin.current_price,
         master_score=master_score,
         buy_target=buy_target,
         signal=signal,
-        warnings=all_warnings,
+        warnings=composite_result.warnings,
     )
 
 

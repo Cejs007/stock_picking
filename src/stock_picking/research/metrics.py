@@ -64,9 +64,10 @@ def build_samples(
 
 
 def composite_value(sample: Sample, weights: dict[str, float]) -> float | None:
-    results = {name: (fv, []) for name, fv in sample.fair_values.items()}
-    value, _active, _warnings = calculate_composite(results, weights)
-    return value
+    results: dict[str, tuple[float | None, list[str]]] = {
+        name: (fv, []) for name, fv in sample.fair_values.items()
+    }
+    return calculate_composite(results, weights).fair_value
 
 
 def mape_coverage(

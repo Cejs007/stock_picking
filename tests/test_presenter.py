@@ -85,6 +85,26 @@ def test_build_dashboard_rows_none_composite_shows_na(result: ValuationResult) -
     assert row["Signal"] == "N/A"
 
 
+def test_build_dashboard_rows_shows_fair_value_range_and_disagreement(
+    result: ValuationResult,
+) -> None:
+    ranged = result.model_copy(
+        update={"fair_value_low": 130.0, "fair_value_high": 160.0, "fair_value_cv": 0.0812}
+    )
+    row = build_dashboard_rows([ranged])[0]
+    assert row["FV Low"] == "$130.00"
+    assert row["FV High"] == "$160.00"
+    # CV 0.0812 shown as an unsigned percentage: 8.1%
+    assert row["Disagreement"] == "8.1%"
+
+
+def test_build_dashboard_rows_missing_range_shows_na(result: ValuationResult) -> None:
+    row = build_dashboard_rows([result])[0]
+    assert row["FV Low"] == "N/A"
+    assert row["FV High"] == "N/A"
+    assert row["Disagreement"] == "N/A"
+
+
 def test_build_dashboard_rows_formats_values(result: ValuationResult) -> None:
     row = build_dashboard_rows([result])[0]
     assert row["Ticker"] == "AAPL"

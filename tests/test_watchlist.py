@@ -1,3 +1,5 @@
+import sqlite3
+
 import pytest
 
 from stock_picking.watchlist import TickerOverrides, ValuationResult, Watchlist
@@ -12,10 +14,7 @@ def wl() -> Watchlist:
 def valuation() -> ValuationResult:
     return ValuationResult(
         ticker="AAPL",
-        fair_value_dcf=180.0,
-        fair_value_graham=67.0,
-        fair_value_pe=85.0,
-        fair_value_ev_ebitda=18.0,
+        fair_values={"dcf": 180.0, "graham": 67.0, "pe_relative": 85.0, "ev_ebitda": 18.0},
         fair_value_composite=87.5,
         current_price=100.0,
         master_score=-12.5,
@@ -80,6 +79,47 @@ def test_save_valuation_overwrites_previous(wl: Watchlist, valuation: ValuationR
     assert len(results) == 1
     assert results[0].fair_value_composite == pytest.approx(120.0)
     assert results[0].signal == "BUY"
+
+
+def test_fair_values_roundtrip_including_na_and_any_model_name(
+    wl: Watchlist, valuation: ValuationResult
+) -> None:
+    fvs = {"graham": None, "dcf": 180.0, "some_new_model": 42.0}
+    wl.save_valuation(valuation.model_copy(update={"fair_values": fvs}))
+    assert wl.get_valuations()[0].fair_values == fvs
+
+
+def test_legacy_valuations_table_is_migrated_to_fair_values(tmp_path) -> None:
+    db = tmp_path / "legacy.db"
+    conn = sqlite3.connect(db)
+    conn.execute("""
+        CREATE TABLE valuations (
+            ticker TEXT PRIMARY KEY,
+            fair_value_dcf REAL,
+            fair_value_graham REAL,
+            fair_value_pe REAL,
+            fair_value_ev_ebitda REAL,
+            fair_value_composite REAL,
+            current_price REAL NOT NULL,
+            master_score REAL,
+            buy_target REAL,
+            signal TEXT NOT NULL,
+            warnings TEXT NOT NULL DEFAULT '[]',
+            calculated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute(
+        "INSERT INTO valuations VALUES"
+        " ('AAPL', 180.0, NULL, 85.0, 18.0, 87.5, 100.0, -12.5, 65.6, 'WAIT', '[]',"
+        " '2026-01-01T00:00:00+00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    r = Watchlist(db_path=str(db)).get_valuations()[0]
+
+    assert r.fair_values == {"graham": None, "pe_relative": 85.0, "ev_ebitda": 18.0, "dcf": 180.0}
+    assert r.fair_value_composite == pytest.approx(87.5)
 
 
 def test_add_stores_metadata_in_get_all_entries(wl: Watchlist) -> None:

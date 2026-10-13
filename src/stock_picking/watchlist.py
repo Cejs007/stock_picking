@@ -2,7 +2,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class WatchlistEntry(BaseModel):
@@ -22,10 +22,8 @@ class TickerOverrides(BaseModel):
 
 class ValuationResult(BaseModel):
     ticker: str
-    fair_value_dcf: float | None = None
-    fair_value_graham: float | None = None
-    fair_value_pe: float | None = None
-    fair_value_ev_ebitda: float | None = None
+    # Per-model fair value per share, keyed by MODEL_REGISTRY name.
+    fair_values: dict[str, float | None] = Field(default_factory=dict)
     fair_value_composite: float | None = None
     current_price: float
     master_score: float | None = None
@@ -41,10 +39,7 @@ class Watchlist:
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS valuations (
                 ticker TEXT PRIMARY KEY,
-                fair_value_dcf REAL,
-                fair_value_graham REAL,
-                fair_value_pe REAL,
-                fair_value_ev_ebitda REAL,
+                fair_values TEXT NOT NULL DEFAULT '{}',
                 fair_value_composite REAL,
                 current_price REAL NOT NULL,
                 master_score REAL,
@@ -54,6 +49,7 @@ class Watchlist:
                 calculated_at TEXT NOT NULL
             )
         """)
+        self._migrate_fair_values_column()
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS watchlist (
                 ticker TEXT PRIMARY KEY,
@@ -68,6 +64,24 @@ class Watchlist:
             )
         """)
         self._conn.commit()
+
+    def _migrate_fair_values_column(self) -> None:
+        # Pre-registry DBs stored one REAL column per model; fold them into the
+        # fair_values JSON keyed by registry name. Legacy columns are left unused.
+        columns = {r[1] for r in self._conn.execute("PRAGMA table_info(valuations)")}
+        if "fair_values" in columns:
+            return
+        self._conn.execute(
+            "ALTER TABLE valuations ADD COLUMN fair_values TEXT NOT NULL DEFAULT '{}'"
+        )
+        self._conn.execute("""
+            UPDATE valuations SET fair_values = json_object(
+                'graham', fair_value_graham,
+                'pe_relative', fair_value_pe,
+                'ev_ebitda', fair_value_ev_ebitda,
+                'dcf', fair_value_dcf
+            )
+        """)
 
     def add(self, ticker: str, company_name: str | None = None, currency: str | None = None) -> None:
         self._conn.execute(
@@ -149,15 +163,11 @@ class Watchlist:
         self._conn.execute(
             """
             INSERT INTO valuations (
-                ticker, fair_value_dcf, fair_value_graham, fair_value_pe,
-                fair_value_ev_ebitda, fair_value_composite, current_price,
+                ticker, fair_values, fair_value_composite, current_price,
                 master_score, buy_target, signal, warnings, calculated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ticker) DO UPDATE SET
-                fair_value_dcf = excluded.fair_value_dcf,
-                fair_value_graham = excluded.fair_value_graham,
-                fair_value_pe = excluded.fair_value_pe,
-                fair_value_ev_ebitda = excluded.fair_value_ev_ebitda,
+                fair_values = excluded.fair_values,
                 fair_value_composite = excluded.fair_value_composite,
                 current_price = excluded.current_price,
                 master_score = excluded.master_score,
@@ -168,10 +178,7 @@ class Watchlist:
             """,
             (
                 result.ticker,
-                result.fair_value_dcf,
-                result.fair_value_graham,
-                result.fair_value_pe,
-                result.fair_value_ev_ebitda,
+                json.dumps(result.fair_values),
                 result.fair_value_composite,
                 result.current_price,
                 result.master_score,
@@ -186,8 +193,7 @@ class Watchlist:
     def get_valuations(self) -> list[ValuationResult]:
         rows = self._conn.execute(
             """
-            SELECT ticker, fair_value_dcf, fair_value_graham, fair_value_pe,
-                   fair_value_ev_ebitda, fair_value_composite, current_price,
+            SELECT ticker, fair_values, fair_value_composite, current_price,
                    master_score, buy_target, signal, warnings, calculated_at
             FROM valuations
             """
@@ -195,17 +201,14 @@ class Watchlist:
         return [
             ValuationResult(
                 ticker=r[0],
-                fair_value_dcf=r[1],
-                fair_value_graham=r[2],
-                fair_value_pe=r[3],
-                fair_value_ev_ebitda=r[4],
-                fair_value_composite=r[5],
-                current_price=r[6],
-                master_score=r[7],
-                buy_target=r[8],
-                signal=r[9],
-                warnings=json.loads(r[10]),
-                calculated_at=datetime.fromisoformat(r[11]),
+                fair_values=json.loads(r[1]),
+                fair_value_composite=r[2],
+                current_price=r[3],
+                master_score=r[4],
+                buy_target=r[5],
+                signal=r[6],
+                warnings=json.loads(r[7]),
+                calculated_at=datetime.fromisoformat(r[8]),
             )
             for r in rows
         ]

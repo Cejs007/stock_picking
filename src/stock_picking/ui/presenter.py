@@ -1,3 +1,4 @@
+from stock_picking.models.registry import MODEL_REGISTRY
 from stock_picking.watchlist import ValuationResult
 
 _CURRENCY_SYMBOLS: dict[str, str] = {
@@ -23,18 +24,17 @@ def build_dashboard_rows(results: list[ValuationResult]) -> list[dict]:
     rows = []
     for r in sorted_results:
         currency = "USD"
-        rows.append({
+        row = {
             "Ticker": r.ticker,
             "Price": format_currency(r.current_price, currency),
             "Fair Value": format_currency(r.fair_value_composite, currency),
             "Upside": format_percent(r.master_score),
             "Buy Target": format_currency(r.buy_target, currency),
             "Signal": r.signal,
-            "Graham": format_currency(r.fair_value_graham, currency),
-            "P/E": format_currency(r.fair_value_pe, currency),
-            "EV/EBITDA": format_currency(r.fair_value_ev_ebitda, currency),
-            "DCF": format_currency(r.fair_value_dcf, currency),
-        })
+        }
+        for name, model in MODEL_REGISTRY.items():
+            row[model.label] = format_currency(r.fair_values.get(name), currency)
+        rows.append(row)
     return rows
 
 

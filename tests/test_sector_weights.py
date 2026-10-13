@@ -54,10 +54,10 @@ def test_valuate_without_sector_uses_default(fin: FinancialData) -> None:
     settings = Settings()
     w = settings.model_weights
     result = valuate(fin, settings)
-    assert result.fair_value_dcf is not None
+    assert result.fair_values["dcf"] is not None
     total = w["pe_relative"] + w["ev_ebitda"] + w["dcf"]  # graham weight is 0
     expected = (85.0 * w["pe_relative"] + 18.0 * w["ev_ebitda"]
-                + result.fair_value_dcf * w["dcf"]) / total
+                + result.fair_values["dcf"] * w["dcf"]) / total
     assert result.fair_value_composite == pytest.approx(expected, rel=1e-6)
 
 

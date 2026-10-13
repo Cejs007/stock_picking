@@ -22,19 +22,12 @@ import math
 from dataclasses import dataclass
 
 from stock_picking.data.models import FinancialData, ModelConfig
-from stock_picking.models import dcf, ev_ebitda, graham, pe_relative
 from stock_picking.models.composite import calculate_composite
+from stock_picking.models.registry import MODEL_REGISTRY
 
 # Penalty weight on missing coverage, in MAPE percentage points per unit of
 # missing coverage. 10.0 means "dropping 10% of names costs 1 MAPE point".
 COVERAGE_PENALTY = 10.0
-
-_MODEL_FUNCS = {
-    "graham": graham.calculate,
-    "pe_relative": pe_relative.calculate,
-    "ev_ebitda": ev_ebitda.calculate,
-    "dcf": dcf.calculate,
-}
 
 
 @dataclass(frozen=True)
@@ -50,11 +43,15 @@ class Sample:
 def build_samples(
     dataset: list[FinancialData], config: ModelConfig | None = None
 ) -> list[Sample]:
-    """Run all four models once per company; reused across every weight config."""
+    """Run every composite model once per company; reused across every weight config."""
     cfg = config or ModelConfig()
     samples: list[Sample] = []
     for fin in dataset:
-        fvs = {name: func(fin, cfg)[0] for name, func in _MODEL_FUNCS.items()}
+        fvs = {
+            name: model.calculate(fin, cfg)[0]
+            for name, model in MODEL_REGISTRY.items()
+            if model.in_composite
+        }
         samples.append(
             Sample(
                 ticker=fin.ticker,

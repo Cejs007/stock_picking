@@ -24,7 +24,7 @@ def test_composite_uses_default_fallback_weights(fin: FinancialData) -> None:
     settings = Settings()
     w = settings.weights_for(None)
     result = valuate(fin, settings)
-    dcf_fv = result.fair_value_dcf
+    dcf_fv = result.fair_values["dcf"]
     assert dcf_fv is not None
     pe_fv, ev_fv = 85.0, 18.0
     total = w["graham"] * 0 + w["pe_relative"] + w["ev_ebitda"] + w["dcf"]
@@ -75,31 +75,31 @@ def test_wacc_override_lowers_dcf_when_increased(fin: FinancialData) -> None:
     # Higher WACC → lower DCF fair value
     result_default = valuate(fin, Settings())
     result_high_wacc = valuate(fin, Settings(), TickerOverrides(dcf_wacc_override=0.20))
-    assert result_default.fair_value_dcf is not None
-    assert result_high_wacc.fair_value_dcf is not None
-    assert result_high_wacc.fair_value_dcf < result_default.fair_value_dcf
+    assert result_default.fair_values["dcf"] is not None
+    assert result_high_wacc.fair_values["dcf"] is not None
+    assert result_high_wacc.fair_values["dcf"] < result_default.fair_values["dcf"]
 
 
 def test_growth_rate_override_flows_into_dcf(fin: FinancialData) -> None:
     # g=0% < auto CAGR ≈ 5.74% → lower DCF
     result_auto = valuate(fin, Settings())
     result_zero_g = valuate(fin, Settings(), TickerOverrides(dcf_growth_override=0.0))
-    assert result_auto.fair_value_dcf is not None
-    assert result_zero_g.fair_value_dcf is not None
-    assert result_zero_g.fair_value_dcf < result_auto.fair_value_dcf
+    assert result_auto.fair_values["dcf"] is not None
+    assert result_zero_g.fair_values["dcf"] is not None
+    assert result_zero_g.fair_values["dcf"] < result_auto.fair_values["dcf"]
 
 
 def test_one_model_unavailable_composite_from_remaining(fin: FinancialData) -> None:
     # eps_ttm=None → Graham and P/E both N/A; composite uses only EV/EBITDA + DCF
     no_eps = fin.model_copy(update={"eps_ttm": None})
     result = valuate(no_eps, Settings())
-    assert result.fair_value_graham is None
-    assert result.fair_value_pe is None
+    assert result.fair_values["graham"] is None
+    assert result.fair_values["pe_relative"] is None
     assert result.fair_value_composite is not None
     # composite = (ev_ebitda + dcf) / 2  (equal weights renormalized)
-    assert result.fair_value_ev_ebitda is not None
-    assert result.fair_value_dcf is not None
-    expected = (result.fair_value_ev_ebitda + result.fair_value_dcf) / 2
+    assert result.fair_values["ev_ebitda"] is not None
+    assert result.fair_values["dcf"] is not None
+    expected = (result.fair_values["ev_ebitda"] + result.fair_values["dcf"]) / 2
     assert result.fair_value_composite == pytest.approx(expected, rel=1e-6)
     assert any("EPS" in w for w in result.warnings)
 

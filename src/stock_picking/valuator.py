@@ -1,6 +1,6 @@
 from stock_picking.data.models import FinancialData, ModelConfig
-from stock_picking.models import dcf, ev_ebitda, graham, pe_relative
 from stock_picking.models.composite import calculate_composite
+from stock_picking.models.registry import MODEL_REGISTRY
 from stock_picking.settings import Settings
 from stock_picking.watchlist import TickerOverrides, ValuationResult
 
@@ -17,15 +17,15 @@ def valuate(
         else settings.default_mos
     )
 
-    results = {
-        "graham": graham.calculate(fin, cfg),
-        "pe_relative": pe_relative.calculate(fin, cfg),
-        "ev_ebitda": ev_ebitda.calculate(fin, cfg),
-        "dcf": dcf.calculate(fin, cfg),
-    }
+    results = {name: model.calculate(fin, cfg) for name, model in MODEL_REGISTRY.items()}
 
     weights = settings.weights_for(fin.sector)
-    composite, _active, all_warnings = calculate_composite(results, weights)
+    composite_weights = {
+        name: weights.get(name, 0.0)
+        for name, model in MODEL_REGISTRY.items()
+        if model.in_composite
+    }
+    composite, _active, all_warnings = calculate_composite(results, composite_weights)
 
     if composite is not None:
         master_score = (composite - fin.current_price) / fin.current_price * 100
@@ -38,10 +38,7 @@ def valuate(
 
     return ValuationResult(
         ticker=fin.ticker,
-        fair_value_graham=results["graham"][0],
-        fair_value_pe=results["pe_relative"][0],
-        fair_value_ev_ebitda=results["ev_ebitda"][0],
-        fair_value_dcf=results["dcf"][0],
+        fair_values={name: value for name, (value, _) in results.items()},
         fair_value_composite=composite,
         current_price=fin.current_price,
         master_score=master_score,

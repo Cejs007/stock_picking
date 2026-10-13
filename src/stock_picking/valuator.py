@@ -18,6 +18,20 @@ def valuate(
         else settings.default_mos
     )
 
+    if needs_conversion(fin):
+        # Statement totals are still in another currency than the price, so any
+        # fair value would compare mixed currencies. Don't value or rank it.
+        return ValuationResult(
+            ticker=fin.ticker,
+            current_price=fin.current_price,
+            currency=fin.currency,
+            signal="N/A",
+            warnings=[
+                f"Fundamentals are in {fin.financial_currency} but the price is in"
+                f" {fin.currency}; FX rate unavailable, values not converted"
+            ],
+        )
+
     results = {
         "graham": graham.calculate(fin, cfg),
         "pe_relative": pe_relative.calculate(fin, cfg),
@@ -27,11 +41,6 @@ def valuate(
 
     weights = settings.weights_for(fin.sector)
     composite, _active, all_warnings = calculate_composite(results, weights)
-    if needs_conversion(fin):
-        all_warnings.append(
-            f"Fundamentals are in {fin.financial_currency} but the price is in"
-            f" {fin.currency}; FX rate unavailable, values not converted"
-        )
 
     if composite is not None:
         master_score = (composite - fin.current_price) / fin.current_price * 100

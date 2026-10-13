@@ -36,6 +36,7 @@ def build_dashboard_rows(results: list[ValuationResult]) -> list[dict]:
             "P/E": format_currency(r.fair_value_pe, currency),
             "EV/EBITDA": format_currency(r.fair_value_ev_ebitda, currency),
             "DCF": format_currency(r.fair_value_dcf, currency),
+            "Warnings": " | ".join(r.warnings),
         })
     return rows
 

@@ -132,3 +132,25 @@ def test_build_dashboard_rows_legacy_row_without_currency_has_no_symbol(
     legacy = result.model_copy(update={"currency": None})
     row = build_dashboard_rows([legacy])[0]
     assert row["Price"] == "100.00"
+
+
+def test_build_dashboard_rows_shows_why_signal_is_na(result: ValuationResult) -> None:
+    unconverted = ValuationResult(
+        ticker="ASML",
+        current_price=700.0,
+        currency="USD",
+        signal="N/A",
+        warnings=[
+            "Fundamentals are in EUR but the price is in USD; FX rate unavailable,"
+            " values not converted",
+            "FCF history is required for DCF",
+        ],
+    )
+    rows = {r["Ticker"]: r for r in build_dashboard_rows([result, unconverted])}
+
+    assert rows["ASML"]["Signal"] == "N/A"
+    assert rows["ASML"]["Warnings"] == (
+        "Fundamentals are in EUR but the price is in USD; FX rate unavailable,"
+        " values not converted | FCF history is required for DCF"
+    )
+    assert rows["AAPL"]["Warnings"] == ""

@@ -126,12 +126,28 @@ def test_result_carries_quote_currency(fin: FinancialData) -> None:
     assert result.currency == "CZK"
 
 
-def test_unconverted_fundamentals_produce_currency_warning(fin: FinancialData) -> None:
+def test_unconverted_fundamentals_give_na_signal_with_reason(fin: FinancialData) -> None:
+    # Price 1.0 is far below every model's fair value (P/E alone = 85), so with
+    # matching currencies this is a BUY.
+    cheap = fin.model_copy(update={"current_price": 1.0, "financial_currency": "USD"})
+    assert valuate(cheap, Settings()).signal == "BUY"
+
     # FX rate was unavailable upstream: statements still in EUR, quote in USD.
-    mismatched = fin.model_copy(update={"currency": "USD", "financial_currency": "EUR"})
+    # The fair values would mix EUR totals with a USD price, so nothing is
+    # valued or ranked.
+    mismatched = cheap.model_copy(update={"financial_currency": "EUR"})
     result = valuate(mismatched, Settings())
-    assert result.fair_value_composite is not None
-    assert any("EUR" in w and "USD" in w for w in result.warnings)
+
+    assert result.signal == "N/A"
+    assert result.fair_value_composite is None
+    assert result.master_score is None
+    assert result.buy_target is None
+    assert result.fair_value_dcf is None
+    assert result.fair_value_ev_ebitda is None
+    assert result.fair_value_graham is None
+    assert result.fair_value_pe is None
+    assert result.currency == "USD"
+    assert any("EUR" in w and "USD" in w and "not converted" in w for w in result.warnings)
 
 
 def test_matching_currencies_produce_no_currency_warning(fin: FinancialData) -> None:
